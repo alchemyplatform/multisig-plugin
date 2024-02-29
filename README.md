@@ -1,66 +1,11 @@
-## Foundry
+## Modular Account Plugin
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This is a very basic example of an ERC6900 compatible plugin called CounterPlugin, built in Foundry. It has one function that can be called through a user operation, called `increment`. In `/src` you will find this plugin, documented so you can understand how it works in detail.
 
-Foundry consists of:
+You will also find a basic test in `/test` which will show this counter plugin working. Here you'll see how to setup the modular account, install the plugins and send a user operation specifying the intent to increment the count. Use `forge test` to run these tests.
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+Feel free to modify the plugin and tests to challenge your understanding of ERC6900 plugins, or use this to start building your own plugin!
 
-## Documentation
+## Foundry Documentation
 
 https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
