@@ -8,9 +8,9 @@ import {
     ManifestAssociatedFunctionType,
     ManifestAssociatedFunction,
     PluginManifest,
-    PluginMetadata,
-    IPlugin
+    PluginMetadata
 } from "@alchemy/modular-account/src/interfaces/IPlugin.sol";
+import {IMultiOwnerPlugin} from "@alchemy/modular-account/src/plugins/owner/IMultiOwnerPlugin.sol";
 
 /// @title Counter Plugin
 /// @author Alchemy
@@ -63,7 +63,7 @@ contract CounterPlugin is BasePlugin {
         // which will be the multiowner plugin
         // you can find this depedency specified in the installPlugin call in the tests
         manifest.dependencyInterfaceIds = new bytes4[](1);
-        manifest.dependencyInterfaceIds[0] = type(IPlugin).interfaceId;
+        manifest.dependencyInterfaceIds[0] = type(IMultiOwnerPlugin).interfaceId;
 
         // we only have one execution function that can be called, which is the increment function
         // here we define that increment function on the manifest as something that can be called during execution
@@ -87,6 +87,19 @@ contract CounterPlugin is BasePlugin {
         manifest.userOpValidationFunctions[0] = ManifestAssociatedFunction({
             executionSelector: this.increment.selector,
             associatedFunction: ownerUserOpValidationFunction
+        });
+
+        // finally here we will always deny runtime calls to the increment function as we will only call it through user ops
+        // this avoids a potential issue where a future plugin may define
+        // a runtime validation function for it and unauthorized calls may occur due to that
+        manifest.preRuntimeValidationHooks = new ManifestAssociatedFunction[](1);
+        manifest.preRuntimeValidationHooks[0] = ManifestAssociatedFunction({
+            executionSelector: this.increment.selector,
+            associatedFunction: ManifestFunction({
+                functionType: ManifestAssociatedFunctionType.PRE_HOOK_ALWAYS_DENY,
+                functionId: 0,
+                dependencyIndex: 0
+            })
         });
 
         return manifest;
