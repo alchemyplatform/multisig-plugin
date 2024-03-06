@@ -1,14 +1,20 @@
-# Compiler files
-cache/
+# Foundry build and cache directories
 out/
+out-optimized/
+cache/
+node_modules/
 
-# Ignores development broadcast logs
-!/broadcast
-/broadcast/*/31337/
-/broadcast/**/dry-run/
+# coverage
+report/
+lcov.info
 
-# Docs
-docs/
-
-# Dotenv file
+# secret
 .env
+
+# deployments
+broadcast/**/run-latest.json
+broadcast/**/dry-run/**/*
+
+# misc
+.DS_Store
+**/.DS_Store
