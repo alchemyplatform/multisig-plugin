@@ -27,10 +27,16 @@ contract CounterPlugin is BasePlugin {
     // in other words, we'll say "make sure the person calling increment is an owner of the account using our multiowner plugin"
     uint256 internal constant _MANIFEST_DEPENDENCY_INDEX_OWNER_USER_OP_VALIDATION = 0;
 
-    // ERC 7562 defines the associated storage rules for ERC 4337 accounts
-    // and plugins need to follow this definition to have succesful user ops executed by a bundler
-    // a mapping from the account address is considered associated storage
-    // see the definition here: https://eips.ethereum.org/EIPS/eip-7562#validation-rules
+    /*
+    * Note to Developer:
+    * If you're using storage during validation, you need to use "associated storage".
+    * ERC 7562 defines the associated storage rules for ERC 4337 accounts.
+    * See: https://eips.ethereum.org/EIPS/eip-7562#validation-rules
+    * 
+    * Plugins need to follow this definition for bundlers to accept user ops targeting their validation functions.
+    * In this case, "count" is only used in an execution function, but nonetheless, it's worth noting
+    * that a mapping from the account address is considered associated storage.
+    */
     mapping(address => uint256) public count;
 
     // ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
