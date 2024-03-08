@@ -69,12 +69,10 @@ contract MultisigModularAccountFactory is Ownable2Step {
     /// @dev The owner array must be in strictly ascending order and not include the 0 address.
     /// @param salt salt for create2
     /// @param owners address array of the owners
-    function createAccount(
-        uint256 salt,
-        address[] calldata owners,
-        uint256 threshold,
-        uint256 manualGasVerificationLimit
-    ) external returns (address addr) {
+    function createAccount(uint256 salt, address[] calldata owners, uint256 threshold)
+        external
+        returns (address addr)
+    {
         if (!FactoryHelpers.isValidOwnerArray(owners)) {
             revert InvalidOwner();
         }
@@ -84,7 +82,7 @@ contract MultisigModularAccountFactory is Ownable2Step {
         }
 
         bytes[] memory pluginInitBytes = new bytes[](1);
-        pluginInitBytes[0] = abi.encode(owners, threshold, manualGasVerificationLimit);
+        pluginInitBytes[0] = abi.encode(owners, threshold);
 
         bytes32 combinedSalt = FactoryHelpers.getCombinedSalt(salt, pluginInitBytes[0]);
         addr = Create2.computeAddress(
@@ -148,13 +146,8 @@ contract MultisigModularAccountFactory is Ownable2Step {
     /// @param salt salt for additional entropy for create2
     /// @param owners array of addresses of the owner
     /// @param threshold threshold of account
-    /// @param manualGasVerificationLimit gas limit for manual verification
     /// @return address of counterfactual account
-    function getAddress(uint256 salt, address[] calldata owners, uint256 threshold, uint256 manualGasVerificationLimit)
-        external
-        view
-        returns (address)
-    {
+    function getAddress(uint256 salt, address[] calldata owners, uint256 threshold) external view returns (address) {
         // Array can't be empty.
         if (owners.length == 0) {
             revert OwnersArrayEmpty();
@@ -175,7 +168,7 @@ contract MultisigModularAccountFactory is Ownable2Step {
         }
 
         return Create2.computeAddress(
-            FactoryHelpers.getCombinedSalt(salt, abi.encode(owners, threshold, manualGasVerificationLimit)),
+            FactoryHelpers.getCombinedSalt(salt, abi.encode(owners, threshold)),
             keccak256(abi.encodePacked(type(ERC1967Proxy).creationCode, abi.encode(IMPL, "")))
         );
     }

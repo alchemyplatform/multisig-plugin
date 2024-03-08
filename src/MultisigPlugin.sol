@@ -30,6 +30,7 @@ import {IMultisigPlugin} from "./IMultisigPlugin.sol";
 /// @title Multisig Plugin
 /// @author Alchemy
 /// @notice This plugin adds a k of n threshold ownership scheme to a ERC6900 smart contract account
+/// @notice The verification design takes inspiration from [Safe](https://github.com/safe-global/safe-smart-account)'s implementation
 ///
 /// It supports [ERC-1271](https://eips.ethereum.org/EIPS/eip-1271) signature
 /// validation for both validating the signature on user operations and in
@@ -67,6 +68,14 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     AssociatedLinkedListSet internal _owners;
     mapping(address => OwnershipMetadata) internal _ownerMetadata;
 
+    /// @notice Metadata of the ownership of an account.
+    /// @param numOwners number of owners on the account
+    /// @param threshold number of signatures required to perform an action
+    struct OwnershipMetadata {
+        uint128 numOwners;
+        uint128 threshold;
+    }
+
     // ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
     // ┃    Execution functions    ┃
     // ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
@@ -74,12 +83,10 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     /// @inheritdoc IMultisigPlugin
     /// @dev If an owner is present in both ownersToAdd and ownersToRemove, it will be added as owner.
     /// The owner array cannot have 0 or duplicated addresses.
-    function updateOwnership(
-        address[] memory ownersToAdd,
-        address[] memory ownersToRemove,
-        uint256 newThreshold,
-        uint256 newVerificationGasLimit
-    ) public isInitialized(msg.sender) {
+    function updateOwnership(address[] memory ownersToAdd, address[] memory ownersToRemove, uint256 newThreshold)
+        public
+        isInitialized(msg.sender)
+    {
         // update owners array
         uint256 toRemoveLen = ownersToRemove.length;
         for (uint256 i = 0; i < toRemoveLen; ++i) {
@@ -102,17 +109,14 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
             if (numOwners == 0) {
                 revert EmptyOwnersNotAllowed();
             }
-            metadata.numOwners = uint64(numOwners);
+            metadata.numOwners = uint128(numOwners);
         }
 
         if (newThreshold != 0) {
-            metadata.threshold = uint64(newThreshold);
+            metadata.threshold = uint128(newThreshold);
         }
         if (metadata.threshold > numOwners) {
             revert InvalidThreshold();
-        }
-        if (newVerificationGasLimit != 0) {
-            metadata.manualVerificationGasLimit = uint128(newVerificationGasLimit);
         }
 
         emit OwnerUpdated(msg.sender, ownersToAdd, ownersToRemove, newThreshold);
@@ -163,7 +167,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     function onUninstall(bytes calldata) external override {
         address[] memory ownersToRemove = CastLib.toAddressArray(_owners.getAll(msg.sender));
         _owners.clear(msg.sender);
-        _ownerMetadata[msg.sender] = OwnershipMetadata(0, 0, 0);
+        _ownerMetadata[msg.sender] = OwnershipMetadata(0, 0);
         emit OwnerUpdated(msg.sender, new address[](0), ownersToRemove, 0);
     }
 
@@ -348,12 +352,8 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     }
 
     /// @inheritdoc IMultisigPlugin
-    function ownershipInfoOf(address account) public view returns (address[] memory, uint256, uint256) {
-        return (
-            CastLib.toAddressArray(_owners.getAll(account)),
-            uint256(_ownerMetadata[account].threshold),
-            uint256(_ownerMetadata[account].manualVerificationGasLimit)
-        );
+    function ownershipInfoOf(address account) public view returns (address[] memory, uint256) {
+        return (CastLib.toAddressArray(_owners.getAll(account)), uint256(_ownerMetadata[account].threshold));
     }
 
     /// @inheritdoc IMultisigPlugin
@@ -374,8 +374,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     /// @inheritdoc BasePlugin
     /// @dev The owner array cannot have 0 or duplicated addresses.
     function _onInstall(bytes calldata data) internal override isNotInitialized(msg.sender) {
-        (address[] memory initialOwners, uint256 threshold, uint256 newVerificationGasLimit) =
-            abi.decode(data, (address[], uint256, uint256));
+        (address[] memory initialOwners, uint256 threshold) = abi.decode(data, (address[], uint256));
         if (initialOwners.length == 0) {
             revert EmptyOwnersNotAllowed();
         }
@@ -384,13 +383,13 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         }
 
         _addOwnersOrRevert(msg.sender, initialOwners);
-        _ownerMetadata[msg.sender] =
-            OwnershipMetadata(uint64(initialOwners.length), uint64(threshold), uint128(newVerificationGasLimit));
+        _ownerMetadata[msg.sender] = OwnershipMetadata(uint128(initialOwners.length), uint128(threshold));
 
         emit OwnerUpdated(msg.sender, initialOwners, new address[](0), threshold);
     }
 
     /// @dev Helper function to get a 65 byte signature from a multi-signature
+    /// @dev Functions using this must make sure the signature is long enough to contain k * 65 bytes
     function _signatureSplit(bytes memory signatures, uint256 pos)
         internal
         pure

@@ -64,39 +64,39 @@ contract MultisigModularAccountFactoryTest is Test {
     }
 
     function test_addressMatch() public {
-        address predicted = factory.getAddress(0, owners, 1, 0);
-        address deployed = factory.createAccount(0, owners, 1, 0);
+        address predicted = factory.getAddress(0, owners, 1);
+        address deployed = factory.createAccount(0, owners, 1);
         assertEq(predicted, deployed);
     }
 
     function test_deploy() public {
-        address deployed = factory.createAccount(0, owners, 1, 0);
+        address deployed = factory.createAccount(0, owners, 1);
 
         // test that the deployed account is initialized
         assertEq(address(UpgradeableModularAccount(payable(deployed)).entryPoint()), address(entryPoint));
 
         // test that the deployed account installed owner plugin correctly
-        (address[] memory actualOwners,,) = multisigPlugin.ownershipInfoOf(deployed);
+        (address[] memory actualOwners,) = multisigPlugin.ownershipInfoOf(deployed);
         assertEq(actualOwners.length, 2);
         assertEq(actualOwners[0], owner2);
         assertEq(actualOwners[1], owner1);
     }
 
     function test_deployCollision() public {
-        address deployed = factory.createAccount(0, owners, 1, 0);
+        address deployed = factory.createAccount(0, owners, 1);
 
         uint256 gasStart = gasleft();
 
         // deploy 2nd time which should short circuit
         // test for short circuit -> call should cost less than a CREATE2, or 32000 gas
-        address secondDeploy = factory.createAccount(0, owners, 1, 0);
+        address secondDeploy = factory.createAccount(0, owners, 1);
 
         assertApproxEqAbs(gasleft(), gasStart, 31999);
         assertEq(deployed, secondDeploy);
     }
 
     function test_deployedAccountHasCorrectPlugins() public {
-        address deployed = factory.createAccount(0, owners, 1, 0);
+        address deployed = factory.createAccount(0, owners, 1);
 
         // check installed plugins on account
         address[] memory plugins = UpgradeableModularAccount(payable(deployed)).getInstalledPlugins();
@@ -106,32 +106,32 @@ contract MultisigModularAccountFactoryTest is Test {
 
     function test_badOwnersArray() public {
         vm.expectRevert(MultisigModularAccountFactory.OwnersArrayEmpty.selector);
-        factory.getAddress(0, new address[](0), 1, 0);
+        factory.getAddress(0, new address[](0), 1);
 
         address[] memory badOwners = new address[](2);
 
         vm.expectRevert(MultisigModularAccountFactory.InvalidOwner.selector);
-        factory.getAddress(0, badOwners, 1, 0);
+        factory.getAddress(0, badOwners, 1);
 
         badOwners[0] = address(1);
         badOwners[1] = address(1);
 
         vm.expectRevert(MultisigModularAccountFactory.InvalidOwner.selector);
-        factory.getAddress(0, badOwners, 1, 0);
+        factory.getAddress(0, badOwners, 1);
     }
 
     function test_badThreshold() public {
         vm.expectRevert(MultisigModularAccountFactory.InvalidThreshold.selector);
-        factory.createAccount(0, owners, 3, 0);
+        factory.createAccount(0, owners, 3);
 
         vm.expectRevert(MultisigModularAccountFactory.InvalidThreshold.selector);
-        factory.getAddress(0, owners, 3, 0);
+        factory.getAddress(0, owners, 3);
 
         vm.expectRevert(MultisigModularAccountFactory.InvalidThreshold.selector);
-        factory.createAccount(0, owners, 0, 0);
+        factory.createAccount(0, owners, 0);
 
         vm.expectRevert(MultisigModularAccountFactory.InvalidThreshold.selector);
-        factory.getAddress(0, owners, 0, 0);
+        factory.getAddress(0, owners, 0);
     }
 
     function test_addStake() public {
@@ -175,14 +175,14 @@ contract MultisigModularAccountFactoryTest is Test {
     }
 
     function test_getAddressWithMaxOwnersAndDeploy() public {
-        address addr = factory.getAddress(0, largeOwners, 1, 0);
-        assertEq(addr, factory.createAccount(0, largeOwners, 1, 0));
+        address addr = factory.getAddress(0, largeOwners, 1);
+        assertEq(addr, factory.createAccount(0, largeOwners, 1));
     }
 
     function test_getAddressWithTooManyOwners() public {
         largeOwners.push(address(101));
         vm.expectRevert(MultisigModularAccountFactory.OwnersLimitExceeded.selector);
-        factory.getAddress(0, largeOwners, 1, 0);
+        factory.getAddress(0, largeOwners, 1);
     }
 
     function test_getAddressWithUnsortedOwners() public {
@@ -190,7 +190,7 @@ contract MultisigModularAccountFactoryTest is Test {
         tempOwners[0] = address(2);
         tempOwners[1] = address(1);
         vm.expectRevert(MultisigModularAccountFactory.InvalidOwner.selector);
-        factory.getAddress(0, tempOwners, 1, 0);
+        factory.getAddress(0, tempOwners, 1);
     }
 
     function test_deployWithDuplicateOwners() public {
@@ -198,7 +198,7 @@ contract MultisigModularAccountFactoryTest is Test {
         tempOwners[0] = address(1);
         tempOwners[1] = address(1);
         vm.expectRevert(MultisigModularAccountFactory.InvalidOwner.selector);
-        factory.createAccount(0, tempOwners, 1, 0);
+        factory.createAccount(0, tempOwners, 1);
     }
 
     function test_deployWithUnsortedOwners() public {
@@ -206,7 +206,7 @@ contract MultisigModularAccountFactoryTest is Test {
         tempOwners[0] = address(2);
         tempOwners[1] = address(1);
         vm.expectRevert(MultisigModularAccountFactory.InvalidOwner.selector);
-        factory.createAccount(0, tempOwners, 1, 0);
+        factory.createAccount(0, tempOwners, 1);
     }
 
     // to receive funds from withdraw

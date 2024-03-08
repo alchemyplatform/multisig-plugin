@@ -22,16 +22,6 @@ interface IMultisigPlugin {
         USER_OP_VALIDATION_OWNER // require owner access
     }
 
-    /// @notice Metadata of the ownership of an account.
-    /// @param numOwners number of owners on the account
-    /// @param threshold number of signatures required to perform an action
-    /// @param manualVerificationGasLimit gas limit for manual verification
-    struct OwnershipMetadata {
-        uint64 numOwners;
-        uint64 threshold;
-        uint128 manualVerificationGasLimit;
-    }
-
     /// @notice This event is emitted when owners of the account are updated.
     /// @param account The account whose ownership changed.
     /// @param addedOwners The address array of added owners.
@@ -47,19 +37,14 @@ interface IMultisigPlugin {
     error ECDSARecoverFailure();
     error InvalidSigOffset();
 
-    /// @notice Update owners of the account, and/or threshold, and/or manual verification gas limit.
+    /// @notice Update owners of the account, and/or threshold
     /// @dev This function is installed on the account as part of plugin installation, and should
     /// only be called from an account.
     /// @param ownersToAdd The address array of owners to be added.
     /// @param ownersToRemove The address array of owners to be removed.
     /// @param newThreshold The new threshold.
-    /// @param manualVerificationGasLimit The new manual verification gas limit.
-    function updateOwnership(
-        address[] memory ownersToAdd,
-        address[] memory ownersToRemove,
-        uint256 newThreshold,
-        uint256 manualVerificationGasLimit
-    ) external;
+    function updateOwnership(address[] memory ownersToAdd, address[] memory ownersToRemove, uint256 newThreshold)
+        external;
 
     /// @notice Gets the EIP712 domain
     /// @dev This implementation is different from typical 712 via its use of msg.sender instead. As such, it
@@ -93,10 +78,10 @@ interface IMultisigPlugin {
     /// @return True if the address is an owner of the account.
     function isOwnerOf(address account, address ownerToCheck) external view returns (bool);
 
-    /// @notice Get the owners of `account`, the threshold, and the manual verification gas limit.
+    /// @notice Get the owners of `account`, and the threshold.
     /// @param account The account to get the owners of.
-    /// @return The addresses of the owners of the account, the threshold, and the manual verification gas limit.
-    function ownershipInfoOf(address account) external view returns (address[] memory, uint256, uint256);
+    /// @return The addresses of the owners of the account, and the threshold
+    function ownershipInfoOf(address account) external view returns (address[] memory, uint256);
 
     /// @notice Returns the pre-image of the message hash
     /// @dev Assumes that the SCA's implementation of `domainSeparator` is this plugin's

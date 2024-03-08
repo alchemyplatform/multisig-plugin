@@ -81,7 +81,7 @@ contract MultisigPluginTest is Test {
         emit OwnerUpdated(address(this), ownersToAdd, new address[](0), 1);
 
         plugin.onInstall(abi.encode(ownersToAdd, threshold));
-        (address[] memory returnedOwners, uint256 actualThreshold,) = plugin.ownershipInfoOf(address(this));
+        (address[] memory returnedOwners, uint256 actualThreshold) = plugin.ownershipInfoOf(address(this));
         assertEq(returnedOwners.length, 1);
         assertEq(returnedOwners[0], ownerToAdd);
         assertEq(actualThreshold, threshold);
@@ -93,7 +93,7 @@ contract MultisigPluginTest is Test {
 
         vm.prank(accountA);
         plugin.onUninstall(abi.encode(""));
-        (address[] memory returnedOwners, uint256 actualThreshold,) = plugin.ownershipInfoOf(accountA);
+        (address[] memory returnedOwners, uint256 actualThreshold) = plugin.ownershipInfoOf(accountA);
         assertEq(returnedOwners.length, 0);
         assertEq(actualThreshold, 0);
     }
@@ -120,7 +120,7 @@ contract MultisigPluginTest is Test {
     function test_updateOwners_failWithEmptyOwners() public {
         vm.expectRevert(IMultisigPlugin.EmptyOwnersNotAllowed.selector);
         vm.prank(accountA);
-        plugin.updateOwnership(new address[](0), ownersToAdd, 0, 0);
+        plugin.updateOwnership(new address[](0), ownersToAdd, 0);
     }
 
     function test_updateOwners_failWithZeroAddressOwner() public {
@@ -128,7 +128,7 @@ contract MultisigPluginTest is Test {
 
         vm.startPrank(accountA);
         vm.expectRevert(abi.encodeWithSelector(IMultisigPlugin.InvalidOwner.selector, address(0)));
-        plugin.updateOwnership(badOwnersToAdd, new address[](0), 0, 0);
+        plugin.updateOwnership(badOwnersToAdd, new address[](0), 0);
     }
 
     function test_updateOwners_failWithDuplicatedAddresses() public {
@@ -138,13 +138,13 @@ contract MultisigPluginTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(IMultisigPlugin.InvalidOwner.selector, ownerToAdd));
         vm.prank(accountA);
-        plugin.updateOwnership(badOwnersToAdd, new address[](0), 0, 0);
+        plugin.updateOwnership(badOwnersToAdd, new address[](0), 0);
     }
 
     function test_updateOwners_failExceedThreshold() public {
         vm.expectRevert(abi.encodeWithSelector(IMultisigPlugin.InvalidThreshold.selector));
         vm.prank(accountA);
-        plugin.updateOwnership(new address[](0), new address[](0), 2, 0);
+        plugin.updateOwnership(new address[](0), new address[](0), 2);
     }
 
     function test_updateOwners_failWithNotExist() public {
@@ -153,7 +153,7 @@ contract MultisigPluginTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(IMultisigPlugin.OwnerDoesNotExist.selector, ownersToRemove[0]));
         vm.prank(accountA);
-        plugin.updateOwnership(new address[](0), ownersToRemove, 0, 0);
+        plugin.updateOwnership(new address[](0), ownersToRemove, 0);
     }
 
     function test_updateOwners_success() public {
@@ -170,20 +170,17 @@ contract MultisigPluginTest is Test {
         ownersToAdd1[1] = newOwner2;
 
         uint256 newThreshold = 2;
-        uint256 manualVerificationGasLimit = 100000;
 
         vm.expectEmit(true, true, true, true);
         emit OwnerUpdated(accountA, ownersToAdd1, ownersToRemove, newThreshold);
 
-        plugin.updateOwnership(ownersToAdd1, ownersToRemove, newThreshold, manualVerificationGasLimit);
+        plugin.updateOwnership(ownersToAdd1, ownersToRemove, newThreshold);
 
-        (address[] memory newOwnerList, uint256 actualThreshold, uint256 actualVerificationGasLimit) =
-            plugin.ownershipInfoOf(accountA);
+        (address[] memory newOwnerList, uint256 actualThreshold) = plugin.ownershipInfoOf(accountA);
         assertEq(newOwnerList.length, 2);
         assertEq(newOwnerList[0], newOwner2);
         assertEq(newOwnerList[1], newOwner);
         assertEq(actualThreshold, newThreshold);
-        assertEq(actualVerificationGasLimit, manualVerificationGasLimit);
     }
 
     function testFuzz_isValidSignature_EOAOwner(string memory salt, bytes32 digest) public {
@@ -201,7 +198,7 @@ contract MultisigPluginTest is Test {
             // sig check should fail
             assertEq(bytes4(0xFFFFFFFF), plugin.isValidSignature(digest, abi.encodePacked(r, s, v)));
 
-            plugin.updateOwnership(ownersToAdd1, new address[](0), 0, 0);
+            plugin.updateOwnership(ownersToAdd1, new address[](0), 0);
         }
 
         // sig check should pass
@@ -224,7 +221,7 @@ contract MultisigPluginTest is Test {
             // sig check should fail
             assertEq(bytes4(0xFFFFFFFF), plugin.isValidSignature(digest, abi.encodePacked(r, s, v)));
 
-            plugin.updateOwnership(ownersToAdd1, new address[](0), 0, 0);
+            plugin.updateOwnership(ownersToAdd1, new address[](0), 0);
         }
 
         assertEq(_1271_MAGIC_VALUE, plugin.isValidSignature(digest, sig));
@@ -267,7 +264,7 @@ contract MultisigPluginTest is Test {
             );
 
             // add signer to owner
-            plugin.updateOwnership(ownersToAdd1, new address[](0), 0, 0);
+            plugin.updateOwnership(ownersToAdd1, new address[](0), 0);
         }
 
         // sig check should pass
@@ -302,7 +299,7 @@ contract MultisigPluginTest is Test {
             );
 
             // add signer to owner
-            plugin.updateOwnership(ownersToAdd1, new address[](0), 0, 0);
+            plugin.updateOwnership(ownersToAdd1, new address[](0), 0);
         }
 
         // sig check should pass
@@ -316,16 +313,11 @@ contract MultisigPluginTest is Test {
 
     function testFuzz_userOpValidationFunction_Multisig(uint256 k, uint256 n, UserOperation memory userOp) public {
         // making sure numbers are sensible
-        if (k > 10) {
-            k %= 11;
-        }
-        if (n > 10) {
-            n %= 11;
-        }
+        n %= 11;
         vm.assume(n > 0);
-        if (k > n) {
-            k %= n;
-        }
+
+        k %= 11;
+        k %= n;
         vm.assume(k > 0);
 
         // get all owners
@@ -355,7 +347,7 @@ contract MultisigPluginTest is Test {
             (owners[i], owners[minIdx]) = (owners[minIdx], owners[i]);
         }
 
-        plugin.onInstall(abi.encode(ownersToAdd1, k, 0));
+        plugin.onInstall(abi.encode(ownersToAdd1, k));
         bytes32 userOpHash = entryPoint.getUserOpHash(userOp);
 
         userOp.signature = bytes("");
@@ -393,7 +385,7 @@ contract MultisigPluginTest is Test {
 
         // can't transfer owner if not initialized yet
         vm.expectRevert(abi.encodeWithSelector(BasePlugin.NotInitialized.selector));
-        plugin.updateOwnership(addrArr, new address[](0), 0, 0);
+        plugin.updateOwnership(addrArr, new address[](0), 0);
 
         // can't oninstall twice
         plugin.onInstall(abi.encode(addrArr, 1));
