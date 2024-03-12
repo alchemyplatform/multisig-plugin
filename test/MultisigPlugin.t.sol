@@ -57,7 +57,7 @@ contract MultisigPluginTest is Test {
 
     function setUp() public {
         entryPoint = IEntryPoint(address(new EntryPoint()));
-        plugin = new MultisigPlugin();
+        plugin = new MultisigPlugin(entryPoint);
         accountA = address(new MockContractOwner(address(0)));
         ownersToAdd.push(ownerToAdd);
         vm.prank(accountA);
@@ -541,6 +541,104 @@ contract MultisigPluginTest is Test {
         assertEq(
             plugin.userOpValidationFunction(
                 uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, userOpHash
+            ),
+            0
+        );
+    }
+
+    function testFuzz_userOpValidationFunction_Multisig_VariableGas(uint256 k, uint256 n, UserOperation memory userOp)
+        public
+    {
+        // making sure numbers are sensible
+        n %= 11;
+        vm.assume(n > 0);
+
+        k %= 11;
+        k %= n;
+        vm.assume(k > 0);
+
+        vm.assume(userOp.maxFeePerGas != 0);
+        vm.assume(userOp.maxPriorityFeePerGas != 0);
+
+        // get all owners
+        Owner[] memory owners = new Owner[](n);
+        address[] memory ownersToAdd1 = new address[](n);
+        for (uint256 i = 0; i < n; i++) {
+            uint256 seed = k + n + i;
+            if (seed % 2 == 0) {
+                owners[i] = _createAccountOwner(seed);
+                ownersToAdd1[i] = owners[i].owner;
+            } else {
+                (address signer, uint256 privateKey) = makeAddrAndKey(string(abi.encodePacked(seed)));
+                owners[i] = Owner({signer: signer, owner: signer, privateKey: privateKey});
+                ownersToAdd1[i] = signer;
+            }
+        }
+
+        // sort owners
+        uint256 minIdx;
+        for (uint256 i = 0; i < n; i++) {
+            minIdx = i;
+            for (uint256 j = i; j < n; j++) {
+                if (owners[j].owner < owners[minIdx].owner) {
+                    minIdx = j;
+                }
+            }
+            (owners[i], owners[minIdx]) = (owners[minIdx], owners[i]);
+        }
+
+        // grab a ~random owner in the first k sigs to be the last signer
+        // last signer must sign over actual gas vals used
+        address finalOwnerAddr = owners[n % k].owner;
+
+        plugin.onInstall(abi.encode(ownersToAdd1, k));
+        bytes32 maxGasUserOpHash = entryPoint.getUserOpHash(userOp);
+        uint256 upperLimitMaxFeePerGas = userOp.maxFeePerGas;
+        uint256 upperLimitMaxPriorityFeePerGas = userOp.maxPriorityFeePerGas;
+
+        userOp.maxFeePerGas = 0;
+        userOp.maxPriorityFeePerGas = 0;
+        bytes32 actualGasUserOpHash = entryPoint.getUserOpHash(userOp);
+
+        userOp.signature = bytes("");
+        bytes memory contractSigs = bytes("");
+        uint256 offset = k * 65;
+        for (uint256 i = 0; i < k; i++) {
+            uint8 v;
+            bytes32 r;
+            bytes32 s;
+
+            // if final owner, sign the digest with lower gas
+            if (owners[i].owner == finalOwnerAddr) {
+                (v, r, s) = vm.sign(owners[i].privateKey, actualGasUserOpHash.toEthSignedMessageHash());
+            } else {
+                (v, r, s) = vm.sign(owners[i].privateKey, maxGasUserOpHash.toEthSignedMessageHash());
+            }
+
+            // EOA case
+            if (owners[i].signer == owners[i].owner) {
+                if (owners[i].owner == finalOwnerAddr) {
+                    v += 32;
+                }
+                userOp.signature = abi.encodePacked(userOp.signature, abi.encodePacked(r, s, v));
+            } else {
+                userOp.signature = abi.encodePacked(
+                    userOp.signature,
+                    abi.encode(owners[i].owner),
+                    uint256(offset),
+                    owners[i].owner == finalOwnerAddr ? uint8(32) : uint8(0)
+                );
+                offset += 97; // 65 + 32 for length
+                contractSigs = abi.encodePacked(contractSigs, uint256(65), r, s, v);
+            }
+        }
+        userOp.signature =
+            abi.encodePacked(upperLimitMaxFeePerGas, upperLimitMaxPriorityFeePerGas, userOp.signature, contractSigs);
+
+        // sig check should pass
+        assertEq(
+            plugin.userOpValidationFunction(
+                uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, actualGasUserOpHash
             ),
             0
         );

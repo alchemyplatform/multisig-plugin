@@ -24,6 +24,7 @@ import {SIG_VALIDATION_FAILED, SIG_VALIDATION_PASSED} from "@alchemy/modular-acc
 import {CastLib} from "@alchemy/modular-account/src/helpers/CastLib.sol";
 import {IStandardExecutor} from "@alchemy/modular-account/src/interfaces/IStandardExecutor.sol";
 import {UpgradeableModularAccount} from "@alchemy/modular-account/src/account/UpgradeableModularAccount.sol";
+import {IEntryPoint} from "@alchemy/modular-account/src/interfaces/erc4337/IEntryPoint.sol";
 
 import {IMultisigPlugin} from "./IMultisigPlugin.sol";
 
@@ -67,6 +68,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
 
     AssociatedLinkedListSet internal _owners;
     mapping(address => OwnershipMetadata) internal _ownerMetadata;
+    IEntryPoint public immutable ENTRYPOINT;
 
     /// @notice Metadata of the ownership of an account.
     /// @param numOwners number of owners on the account
@@ -74,6 +76,10 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     struct OwnershipMetadata {
         uint128 numOwners;
         uint128 threshold;
+    }
+
+    constructor(IEntryPoint entryPoint) {
+        ENTRYPOINT = entryPoint;
     }
 
     // ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -192,13 +198,13 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
             uint256 upperLimitMaxPriorityFeePerGas = abi.decode(userOp.signature[32:64], (uint256));
 
             bytes32 actualDigest = userOpHash.toEthSignedMessageHash();
-            bytes32 maxGasDigest = (
+            bytes32 upperLimitDigest = (
                 upperLimitMaxFeePerGas == userOp.maxFeePerGas
                     && upperLimitMaxPriorityFeePerGas == userOp.maxPriorityFeePerGas
             )
                 ? actualDigest
                 : _getUserOpHash(userOp, upperLimitMaxFeePerGas, upperLimitMaxPriorityFeePerGas).toEthSignedMessageHash();
-            (bool failed,) = checkNSignatures(actualDigest, maxGasDigest, msg.sender, userOp.signature[64:]);
+            (bool failed,) = checkNSignatures(actualDigest, upperLimitDigest, msg.sender, userOp.signature[64:]);
 
             // make sure userOp doesnt use more than the max fees
             failed = failed || upperLimitMaxFeePerGas < userOp.maxFeePerGas;
@@ -210,40 +216,14 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         revert NotImplemented(msg.sig, functionId);
     }
 
-    // todo: optimize
     function _getUserOpHash(
-        UserOperation calldata userOp,
-        uint256 actualMaxFeePerGas,
-        uint256 actualMaxPriorityFeePerGas
-    ) internal pure returns (bytes32) {
-        address sender;
-        assembly {
-            sender := calldataload(userOp)
-        }
-
-        return keccak256(
-            abi.encode(
-                sender,
-                userOp.nonce,
-                _calldataKeccak(userOp.initCode),
-                _calldataKeccak(userOp.callData),
-                userOp.callGasLimit,
-                userOp.verificationGasLimit,
-                userOp.preVerificationGas,
-                actualMaxFeePerGas,
-                actualMaxPriorityFeePerGas,
-                _calldataKeccak(userOp.paymasterAndData)
-            )
-        );
-    }
-
-    function _calldataKeccak(bytes calldata data) internal pure returns (bytes32 ret) {
-        assembly {
-            let mem := mload(0x40)
-            let len := data.length
-            calldatacopy(mem, data.offset, len)
-            ret := keccak256(mem, len)
-        }
+        UserOperation memory userOp,
+        uint256 upperLimitMaxFeePerGas,
+        uint256 upperLimitMaxPriorityFeePerGas
+    ) internal view returns (bytes32) {
+        userOp.maxFeePerGas = upperLimitMaxFeePerGas;
+        userOp.maxPriorityFeePerGas = upperLimitMaxPriorityFeePerGas;
+        return ENTRYPOINT.getUserOpHash(userOp);
     }
 
     /// @inheritdoc BasePlugin
@@ -343,11 +323,12 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     // ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
     /// @inheritdoc IMultisigPlugin
-    function checkNSignatures(bytes32 actualDigest, bytes32 maxGasDigest, address account, bytes memory signatures)
-        public
-        view
-        returns (bool failed, uint256 firstFailure)
-    {
+    function checkNSignatures(
+        bytes32 actualDigest,
+        bytes32 upperLimitGasDigest,
+        address account,
+        bytes memory signatures
+    ) public view returns (bool failed, uint256 firstFailure) {
         uint256 threshold = uint256(_ownerMetadata[account].threshold);
 
         address lastOwner;
@@ -355,21 +336,21 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         uint8 v;
         bytes32 r;
         bytes32 s;
-        bool needSigOnActualGas = actualDigest != maxGasDigest;
+        bool needSigOnActualGas = actualDigest != upperLimitGasDigest;
 
         for (uint256 i = 0; i < threshold; i++) {
             (v, r, s) = _signatureSplit(signatures, i);
 
             bool sigSuccess;
 
-            // v > 30 implies it's signed over the actual digest
+            // v >= 32 implies it's signed over the actual digest
             bytes32 digest;
             if (v >= 32) {
                 digest = actualDigest;
                 v %= 32;
                 needSigOnActualGas = false;
             } else {
-                digest = maxGasDigest;
+                digest = upperLimitGasDigest;
             }
 
             // v == 0 is the contract owner case
