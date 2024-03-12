@@ -192,9 +192,13 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
             uint256 upperLimitMaxFeePerGas = abi.decode(userOp.signature[0:32], (uint256));
             uint256 upperLimitMaxPriorityFeePerGas = abi.decode(userOp.signature[32:64], (uint256));
 
-            bytes32 maxGasDigest =
-                _getUserOpHash(userOp, upperLimitMaxFeePerGas, upperLimitMaxPriorityFeePerGas).toEthSignedMessageHash();
             bytes32 actualDigest = userOpHash.toEthSignedMessageHash();
+            bytes32 maxGasDigest = (
+                upperLimitMaxFeePerGas == userOp.maxFeePerGas
+                    && upperLimitMaxPriorityFeePerGas == userOp.maxPriorityFeePerGas
+            )
+                ? actualDigest
+                : _getUserOpHash(userOp, upperLimitMaxFeePerGas, upperLimitMaxPriorityFeePerGas).toEthSignedMessageHash();
             (bool failed,) = checkNSignatures(actualDigest, maxGasDigest, msg.sender, userOp.signature[64:]);
 
             // make sure userOp doesnt use more than the max fees
