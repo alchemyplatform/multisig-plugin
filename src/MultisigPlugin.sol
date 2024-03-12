@@ -192,27 +192,14 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
             uint256 upperLimitMaxFeePerGas = abi.decode(userOp.signature[0:32], (uint256));
             uint256 upperLimitMaxPriorityFeePerGas = abi.decode(userOp.signature[32:64], (uint256));
 
+            bytes32 maxGasDigest =
+                _getUserOpHash(userOp, upperLimitMaxFeePerGas, upperLimitMaxPriorityFeePerGas).toEthSignedMessageHash();
+            bytes32 actualDigest = userOpHash.toEthSignedMessageHash();
+            (bool failed,) = checkNSignatures(actualDigest, maxGasDigest, msg.sender, userOp.signature[64:]);
+
             // make sure userOp doesnt use more than the max fees
-            bool failed = upperLimitMaxFeePerGas < userOp.maxFeePerGas;
+            failed = failed || upperLimitMaxFeePerGas < userOp.maxFeePerGas;
             failed = failed || upperLimitMaxPriorityFeePerGas < userOp.maxPriorityFeePerGas;
-
-            bytes32 maxGasDigest = _getUserOpHash(userOp, upperLimitMaxFeePerGas, upperLimitMaxPriorityFeePerGas);
-
-            bool sigCheckFail;
-            // all signatures cover the actual gas values
-            if (
-                upperLimitMaxFeePerGas == userOp.maxFeePerGas
-                    && upperLimitMaxPriorityFeePerGas == userOp.maxPriorityFeePerGas
-            ) {
-                bytes32 digest = userOpHash.toEthSignedMessageHash();
-                (sigCheckFail,) = checkNSignatures(digest, digest, msg.sender, userOp.signature[64:]);
-            } else {
-                (sigCheckFail,) = checkNSignatures(
-                    userOpHash.toEthSignedMessageHash(), maxGasDigest, msg.sender, userOp.signature[64:]
-                );
-            }
-
-            failed = failed || sigCheckFail;
 
             return failed ? SIG_VALIDATION_FAILED : SIG_VALIDATION_PASSED;
         }
