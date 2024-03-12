@@ -32,6 +32,7 @@ interface IMultisigPlugin {
     error ECDSARecoverFailure();
     error EmptyOwnersNotAllowed();
     error InvalidOwner(address owner);
+    error InvalidSigLength();
     error InvalidSigOffset();
     error InvalidThreshold();
     error NotAuthorized();
@@ -63,11 +64,12 @@ interface IMultisigPlugin {
         );
 
     /// @notice Check if the signatures are valid for the account.
-    /// @param digest The hash of the message.
+    /// @param actualGasDigest The hash of the message.
+    /// @param maxGasDigest The hash of the digest.
     /// @param account The account to check the signatures for.
     /// @param signatures The signatures to check.
     /// @return True if the signatures are valid.
-    function checkNSignatures(bytes32 digest, address account, bytes calldata signatures)
+    function checkNSignatures(bytes32 actualGasDigest, bytes32 maxGasDigest, address account, bytes memory signatures)
         external
         view
         returns (bool, uint256);
