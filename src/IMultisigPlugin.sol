@@ -29,13 +29,13 @@ interface IMultisigPlugin {
     /// @param threshold The new threshold.
     event OwnerUpdated(address indexed account, address[] addedOwners, address[] removedOwners, uint256 threshold);
 
-    error InvalidOwner(address owner);
+    error ECDSARecoverFailure();
     error EmptyOwnersNotAllowed();
+    error InvalidOwner(address owner);
+    error InvalidSigOffset();
+    error InvalidThreshold();
     error NotAuthorized();
     error OwnerDoesNotExist(address owner);
-    error InvalidThreshold();
-    error ECDSARecoverFailure();
-    error InvalidSigOffset();
 
     /// @notice Update owners of the account, and/or threshold
     /// @dev This function is installed on the account as part of plugin installation, and should
