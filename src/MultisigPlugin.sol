@@ -311,7 +311,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 bytes memory contractSignature;
                 {
                     uint256 offset = uint256(s);
-                    if (offset > signatures.length) {
+                    if (offset > signatures.length || offset < 65 * threshold) {
                         revert InvalidSigOffset();
                     }
 
