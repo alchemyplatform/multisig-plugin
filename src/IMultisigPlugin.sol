@@ -31,11 +31,11 @@ interface IMultisigPlugin {
 
     error ECDSARecoverFailure();
     error EmptyOwnersNotAllowed();
+    error InvalidGasValues();
     error InvalidOwner(address owner);
     error InvalidSigLength();
     error InvalidSigOffset();
     error InvalidThreshold();
-    error NotAuthorized();
     error OwnerDoesNotExist(address owner);
 
     /// @notice Update owners of the account, and/or threshold

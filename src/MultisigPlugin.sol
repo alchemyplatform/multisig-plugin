@@ -184,7 +184,6 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
             // 0-31: upperLimitMaxFeePerGas
             // 32-63: upperLimitMaxPriorityFeePerGas
             // 64-: k signatures
-
             if (userOp.signature.length < 64) {
                 revert InvalidSigLength();
             }
@@ -367,7 +366,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
             bytes32 digest;
             if (v >= 32) {
                 digest = actualDigest;
-                v -= 32;
+                v %= 32;
                 needSigOnActualGas = false;
             } else {
                 digest = maxGasDigest;
@@ -383,15 +382,13 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                         revert InvalidSigOffset();
                     }
 
-                    uint256 contractSignatureLen;
-                    assembly ("memory-safe") {
-                        contractSignatureLen := add(signatures, 0x20)
-                    }
-                    if (offset + 32 + contractSignatureLen > signatures.length) {
-                        revert InvalidSigOffset();
-                    }
+                    uint256 totalContractSigLen;
                     assembly ("memory-safe") {
                         contractSignature := add(add(signatures, offset), 0x20)
+                        totalContractSigLen := add(mload(contractSignature), 0x20) // inc prefixed 32 bytes of len(bytes)
+                    }
+                    if (offset + totalContractSigLen > signatures.length) {
+                        revert InvalidSigOffset();
                     }
                 }
 
@@ -416,8 +413,10 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
             lastOwner = currentOwner;
         }
 
-        // if we need a signature on the actual gas, and we didn't get one, make sure to fail
-        failed = failed || needSigOnActualGas;
+        // if we need a signature on the actual gas, and we didn't get one, revert
+        if (needSigOnActualGas) {
+            revert InvalidGasValues();
+        }
     }
 
     /// @inheritdoc IMultisigPlugin
