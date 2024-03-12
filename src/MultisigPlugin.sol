@@ -187,28 +187,44 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     {
         if (functionId == uint8(FunctionId.USER_OP_VALIDATION_OWNER)) {
             // UserOp.sig format:
-            // 0-31: upperLimitMaxFeePerGas
-            // 32-63: upperLimitMaxPriorityFeePerGas
-            // 64-: k signatures
-            if (userOp.signature.length < 64) {
+            // 0-32: upperLimitPreVerificationGas
+            // 32-64: upperLimitMaxFeePerGas
+            // 64-96: upperLimitMaxPriorityFeePerGas
+            // 96-96+n: k signatures, each sig is 65 bytes each (so n = 65 * k)
+            // 96+n-: contract signatures if any
+            if (userOp.signature.length < 96) {
                 revert InvalidSigLength();
             }
 
-            uint256 upperLimitMaxFeePerGas = abi.decode(userOp.signature[0:32], (uint256));
-            uint256 upperLimitMaxPriorityFeePerGas = abi.decode(userOp.signature[32:64], (uint256));
+            (
+                uint256 upperLimitPreVerificationGas,
+                uint256 upperLimitMaxFeePerGas,
+                uint256 upperLimitMaxPriorityFeePerGas
+            ) = abi.decode(userOp.signature[0:96], (uint256, uint256, uint256));
 
             bytes32 actualDigest = userOpHash.toEthSignedMessageHash();
             bytes32 upperLimitDigest = (
-                upperLimitMaxFeePerGas == userOp.maxFeePerGas
+                upperLimitPreVerificationGas == userOp.preVerificationGas
+                    && upperLimitMaxFeePerGas == userOp.maxFeePerGas
                     && upperLimitMaxPriorityFeePerGas == userOp.maxPriorityFeePerGas
             )
                 ? actualDigest
-                : _getUserOpHash(userOp, upperLimitMaxFeePerGas, upperLimitMaxPriorityFeePerGas).toEthSignedMessageHash();
-            (bool failed,) = checkNSignatures(actualDigest, upperLimitDigest, msg.sender, userOp.signature[64:]);
+                : _getUserOpHash(
+                    userOp, upperLimitPreVerificationGas, upperLimitMaxFeePerGas, upperLimitMaxPriorityFeePerGas
+                ).toEthSignedMessageHash();
+            (bool failed,) = checkNSignatures(actualDigest, upperLimitDigest, msg.sender, userOp.signature[96:]);
 
             // make sure userOp doesnt use more than the max fees
-            failed = failed || upperLimitMaxFeePerGas < userOp.maxFeePerGas;
-            failed = failed || upperLimitMaxPriorityFeePerGas < userOp.maxPriorityFeePerGas;
+            // we revert here as its better DevEx over silently failing in case a bad dummy sig is used
+            if (upperLimitPreVerificationGas < userOp.preVerificationGas) {
+                revert InvalidPreVerificationGas();
+            }
+            if (upperLimitMaxFeePerGas < userOp.maxFeePerGas) {
+                revert InvalidMaxFeePerGas();
+            }
+            if (upperLimitMaxPriorityFeePerGas < userOp.maxPriorityFeePerGas) {
+                revert InvalidMaxPriorityFeePerGas();
+            }
 
             return failed ? SIG_VALIDATION_FAILED : SIG_VALIDATION_PASSED;
         }
@@ -218,9 +234,11 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
 
     function _getUserOpHash(
         UserOperation memory userOp,
+        uint256 upperLimitPreVerificationGas,
         uint256 upperLimitMaxFeePerGas,
         uint256 upperLimitMaxPriorityFeePerGas
     ) internal view returns (bytes32) {
+        userOp.preVerificationGas = upperLimitPreVerificationGas;
         userOp.maxFeePerGas = upperLimitMaxFeePerGas;
         userOp.maxPriorityFeePerGas = upperLimitMaxPriorityFeePerGas;
         return ENTRYPOINT.getUserOpHash(userOp);
@@ -331,11 +349,17 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     ) public view returns (bool failed, uint256 firstFailure) {
         uint256 threshold = uint256(_ownerMetadata[account].threshold);
 
+        uint256 minSigLen = 65 * threshold;
+        if (signatures.length < minSigLen) {
+            revert InvalidSigLength();
+        }
+
         address lastOwner;
         address currentOwner;
         uint8 v;
         bytes32 r;
         bytes32 s;
+        // if the digests differ, make sure we have at least 1 sig on the digest using the actual gas values
         bool needSigOnActualGas = actualDigest != upperLimitGasDigest;
 
         for (uint256 i = 0; i < threshold; i++) {
@@ -359,7 +383,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 bytes memory contractSignature;
                 {
                     uint256 offset = uint256(s);
-                    if (offset > signatures.length || offset < 65 * threshold) {
+                    if (offset > signatures.length || offset < minSigLen) {
                         revert InvalidSigOffset();
                     }
 

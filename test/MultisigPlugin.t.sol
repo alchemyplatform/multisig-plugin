@@ -246,6 +246,7 @@ contract MultisigPluginTest is Test {
         uint256 gasPrice = 50 gwei;
 
         UserOperation memory userOp;
+        userOp.preVerificationGas = gasPrice; // note: technically this should be a gas price * gas value number
         userOp.maxFeePerGas = gasPrice;
         userOp.maxPriorityFeePerGas = gasPrice;
 
@@ -254,7 +255,7 @@ contract MultisigPluginTest is Test {
         bytes32 userOpHash = entryPoint.getUserOpHash(userOp);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, userOpHash.toEthSignedMessageHash());
 
-        userOp.signature = abi.encodePacked(gasPrice, gasPrice, r, s, v);
+        userOp.signature = abi.encodePacked(gasPrice, gasPrice, gasPrice, r, s, v);
 
         address[] memory ownersToAdd1 = new address[](1);
         ownersToAdd1[0] = signer;
@@ -286,7 +287,7 @@ contract MultisigPluginTest is Test {
         vm.startPrank(accountA);
 
         UserOperation memory userOp;
-        userOp.signature = new bytes(63);
+        userOp.signature = new bytes(95);
         vm.expectRevert(abi.encodeWithSelector(IMultisigPlugin.InvalidSigLength.selector));
         plugin.userOpValidationFunction(uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, bytes32(0));
     }
@@ -304,6 +305,7 @@ contract MultisigPluginTest is Test {
         ownersToAdd1[0] = newOwner.owner;
 
         userOp.signature = abi.encodePacked(
+            userOp.preVerificationGas,
             userOp.maxFeePerGas,
             userOp.maxPriorityFeePerGas,
             abi.encode(newOwner.owner),
@@ -317,7 +319,7 @@ contract MultisigPluginTest is Test {
 
         // Only check that the signature should fail if the signer is not already an owner
         if (!plugin.isOwnerOf(accountA, newOwner.owner)) {
-            // should fail without owner access
+            // should fail without owner access BUT not revert like below
             assertEq(
                 plugin.userOpValidationFunction(
                     uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, userOpHash
@@ -331,6 +333,7 @@ contract MultisigPluginTest is Test {
 
         // sig check should fail
         userOp.signature = abi.encodePacked(
+            userOp.preVerificationGas,
             userOp.maxFeePerGas,
             userOp.maxPriorityFeePerGas,
             abi.encode(newOwner.owner),
@@ -345,6 +348,7 @@ contract MultisigPluginTest is Test {
         plugin.userOpValidationFunction(uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, userOpHash);
 
         userOp.signature = abi.encode(
+            userOp.preVerificationGas,
             userOp.maxFeePerGas,
             userOp.maxPriorityFeePerGas,
             abi.encode(newOwner.owner),
@@ -362,6 +366,7 @@ contract MultisigPluginTest is Test {
     function test_fuzzFailUserOpValidationFunction_BadGas(string memory salt, UserOperation memory userOp) public {
         vm.startPrank(accountA);
 
+        vm.assume(userOp.preVerificationGas != 0);
         vm.assume(userOp.maxFeePerGas != 0);
         vm.assume(userOp.maxPriorityFeePerGas != 0);
 
@@ -370,14 +375,15 @@ contract MultisigPluginTest is Test {
         bytes32 userOpHash = entryPoint.getUserOpHash(userOp);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, userOpHash.toEthSignedMessageHash());
 
-        userOp.signature = abi.encodePacked(userOp.maxFeePerGas, userOp.maxPriorityFeePerGas, r, s, v);
+        userOp.signature =
+            abi.encodePacked(userOp.preVerificationGas, userOp.maxFeePerGas, userOp.maxPriorityFeePerGas, r, s, v);
 
         address[] memory ownersToAdd1 = new address[](1);
         ownersToAdd1[0] = signer;
 
         // Only check that the signature should fail if the signer is not already an owner
         if (!plugin.isOwnerOf(accountA, signer)) {
-            // should fail without owner access
+            // should fail without owner access BUT not revert like below
             assertEq(
                 plugin.userOpValidationFunction(
                     uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, userOpHash
@@ -390,12 +396,82 @@ contract MultisigPluginTest is Test {
         }
 
         // sig check should fail
-        userOp.signature = abi.encodePacked(userOp.maxFeePerGas - 1, userOp.maxPriorityFeePerGas, r, s, v);
+        userOp.signature =
+            abi.encodePacked(userOp.preVerificationGas - 1, userOp.maxFeePerGas, userOp.maxPriorityFeePerGas, r, s, v);
         vm.expectRevert(IMultisigPlugin.InvalidGasValues.selector);
         plugin.userOpValidationFunction(uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, userOpHash);
 
-        userOp.signature = abi.encodePacked(userOp.maxFeePerGas, userOp.maxPriorityFeePerGas - 1, r, s, v);
+        userOp.signature =
+            abi.encodePacked(userOp.preVerificationGas, userOp.maxFeePerGas - 1, userOp.maxPriorityFeePerGas, r, s, v);
         vm.expectRevert(IMultisigPlugin.InvalidGasValues.selector);
+        plugin.userOpValidationFunction(uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, userOpHash);
+
+        userOp.signature =
+            abi.encodePacked(userOp.preVerificationGas, userOp.maxFeePerGas, userOp.maxPriorityFeePerGas - 1, r, s, v);
+        vm.expectRevert(IMultisigPlugin.InvalidGasValues.selector);
+        plugin.userOpValidationFunction(uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, userOpHash);
+    }
+
+    // This test checks the "upper bound invariant"
+    // In the worst case scenario (2/2 multisig), if signer A signs with some gas values, signer B should
+    // not be able to pass validation with a userop with gas values higher than what A signed over
+    function test_fuzzFailUserOpValidationFunction_BadGas2(UserOperation memory userOp) public {
+        vm.startPrank(accountA);
+
+        uint256 maxUint256 = type(uint256).max;
+
+        vm.assume(userOp.preVerificationGas != maxUint256);
+        vm.assume(userOp.maxFeePerGas != maxUint256);
+        vm.assume(userOp.maxPriorityFeePerGas != maxUint256);
+
+        // range bound the possible set of priv keys
+        (address signer, uint256 privateKey) = makeAddrAndKey("1");
+        (address signer2, uint256 privateKey2) = makeAddrAndKey("2");
+
+        address[] memory ownersToAdd1 = new address[](2);
+        ownersToAdd1[0] = signer;
+        ownersToAdd1[1] = signer2;
+
+        // Only check that the signature should fail if the signer is not already an owner
+        if (!plugin.isOwnerOf(accountA, signer)) {
+            // add signer to owner
+            plugin.updateOwnership(ownersToAdd1, new address[](0), 2);
+        }
+
+        bytes32 userOpHash = entryPoint.getUserOpHash(userOp);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, userOpHash.toEthSignedMessageHash());
+
+        // sig check should fail
+        uint256 originalPreVerificationGas = userOp.preVerificationGas;
+        userOp.preVerificationGas = maxUint256;
+        (uint8 v2, bytes32 r2, bytes32 s2) =
+            vm.sign(privateKey2, entryPoint.getUserOpHash(userOp).toEthSignedMessageHash());
+        v += 32; // signer2 trying to use signer1's sig as upper bound
+        bytes memory sig =
+            signer > signer2 ? abi.encodePacked(r, s, v, r2, s2, v2) : abi.encodePacked(r2, s2, v2, r, s, v);
+        userOp.signature =
+            abi.encodePacked(originalPreVerificationGas, userOp.maxFeePerGas, userOp.maxPriorityFeePerGas, sig);
+        vm.expectRevert(IMultisigPlugin.InvalidPreVerificationGas.selector);
+        plugin.userOpValidationFunction(uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, userOpHash);
+
+        uint256 originalMaxFeePerGas = userOp.maxFeePerGas;
+        userOp.maxFeePerGas = maxUint256;
+        (v2, r2, s2) = vm.sign(privateKey2, entryPoint.getUserOpHash(userOp).toEthSignedMessageHash());
+        v += 32; // signer2 trying to use signer1's sig as upper bound
+        sig = signer > signer2 ? abi.encodePacked(r, s, v, r2, s2, v2) : abi.encodePacked(r2, s2, v2, r, s, v);
+        userOp.signature =
+            abi.encodePacked(userOp.preVerificationGas, originalMaxFeePerGas, userOp.maxPriorityFeePerGas, sig);
+        vm.expectRevert(IMultisigPlugin.InvalidMaxFeePerGas.selector);
+        plugin.userOpValidationFunction(uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, userOpHash);
+
+        uint256 originalMaxPriorityFeePerGas = userOp.maxPriorityFeePerGas;
+        userOp.maxPriorityFeePerGas = maxUint256;
+        (v2, r2, s2) = vm.sign(privateKey2, entryPoint.getUserOpHash(userOp).toEthSignedMessageHash());
+        v += 32; // signer2 trying to use signer1's sig as upper bound
+        sig = signer > signer2 ? abi.encodePacked(r, s, v, r2, s2, v2) : abi.encodePacked(r2, s2, v2, r, s, v);
+        userOp.signature =
+            abi.encodePacked(userOp.preVerificationGas, userOp.maxFeePerGas, originalMaxPriorityFeePerGas, sig);
+        vm.expectRevert(IMultisigPlugin.InvalidMaxPriorityFeePerGas.selector);
         plugin.userOpValidationFunction(uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, userOpHash);
     }
 
@@ -407,7 +483,8 @@ contract MultisigPluginTest is Test {
         bytes32 userOpHash = entryPoint.getUserOpHash(userOp);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, userOpHash.toEthSignedMessageHash());
 
-        userOp.signature = abi.encodePacked(userOp.maxFeePerGas, userOp.maxPriorityFeePerGas, r, s, v);
+        userOp.signature =
+            abi.encodePacked(userOp.preVerificationGas, userOp.maxFeePerGas, userOp.maxPriorityFeePerGas, r, s, v);
 
         address[] memory ownersToAdd1 = new address[](1);
         ownersToAdd1[0] = signer;
@@ -443,6 +520,7 @@ contract MultisigPluginTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(newOwner.privateKey, userOpHash.toEthSignedMessageHash());
 
         userOp.signature = abi.encodePacked(
+            userOp.preVerificationGas,
             userOp.maxFeePerGas,
             userOp.maxPriorityFeePerGas,
             abi.encode(newOwner.owner),
@@ -534,8 +612,9 @@ contract MultisigPluginTest is Test {
                 contractSigs = abi.encodePacked(contractSigs, uint256(65), r, s, v);
             }
         }
-        userOp.signature =
-            abi.encodePacked(userOp.maxFeePerGas, userOp.maxPriorityFeePerGas, userOp.signature, contractSigs);
+        userOp.signature = abi.encodePacked(
+            userOp.preVerificationGas, userOp.maxFeePerGas, userOp.maxPriorityFeePerGas, userOp.signature, contractSigs
+        );
 
         // sig check should pass
         assertEq(
@@ -557,6 +636,7 @@ contract MultisigPluginTest is Test {
         k %= n;
         vm.assume(k > 0);
 
+        vm.assume(userOp.preVerificationGas != 0);
         vm.assume(userOp.maxFeePerGas != 0);
         vm.assume(userOp.maxPriorityFeePerGas != 0);
 
@@ -593,9 +673,12 @@ contract MultisigPluginTest is Test {
 
         plugin.onInstall(abi.encode(ownersToAdd1, k));
         bytes32 maxGasUserOpHash = entryPoint.getUserOpHash(userOp);
+        uint256 upperLimitPreVerificationGas = userOp.preVerificationGas;
         uint256 upperLimitMaxFeePerGas = userOp.maxFeePerGas;
         uint256 upperLimitMaxPriorityFeePerGas = userOp.maxPriorityFeePerGas;
 
+        // use 0 as the actual gas vals
+        userOp.preVerificationGas = 0;
         userOp.maxFeePerGas = 0;
         userOp.maxPriorityFeePerGas = 0;
         bytes32 actualGasUserOpHash = entryPoint.getUserOpHash(userOp);
@@ -632,8 +715,13 @@ contract MultisigPluginTest is Test {
                 contractSigs = abi.encodePacked(contractSigs, uint256(65), r, s, v);
             }
         }
-        userOp.signature =
-            abi.encodePacked(upperLimitMaxFeePerGas, upperLimitMaxPriorityFeePerGas, userOp.signature, contractSigs);
+        userOp.signature = abi.encodePacked(
+            upperLimitPreVerificationGas,
+            upperLimitMaxFeePerGas,
+            upperLimitMaxPriorityFeePerGas,
+            userOp.signature,
+            contractSigs
+        );
 
         // sig check should pass
         assertEq(

@@ -32,7 +32,10 @@ interface IMultisigPlugin {
     error ECDSARecoverFailure();
     error EmptyOwnersNotAllowed();
     error InvalidGasValues();
+    error InvalidMaxFeePerGas();
+    error InvalidMaxPriorityFeePerGas();
     error InvalidOwner(address owner);
+    error InvalidPreVerificationGas();
     error InvalidSigLength();
     error InvalidSigOffset();
     error InvalidThreshold();
