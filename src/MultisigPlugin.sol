@@ -118,6 +118,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
             metadata.numOwners = uint128(numOwners);
         }
 
+        // If newThreshold is zero, don't update and keep the previous threshold value
         if (newThreshold != 0) {
             metadata.threshold = uint128(newThreshold);
         }
@@ -403,7 +404,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 sigSuccess = SignatureChecker.isValidERC1271SignatureNow(currentOwner, digest, contractSignature);
             } else {
                 ECDSA.RecoverError error;
-                (currentOwner, error) = digest.tryRecover(abi.encodePacked(r, s, v));
+                (currentOwner, error) = digest.tryRecover(v, r, s);
                 sigSuccess = error == ECDSA.RecoverError.NoError;
             }
 
@@ -473,7 +474,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         pure
         returns (uint8 v, bytes32 r, bytes32 s)
     {
-        assembly {
+        assembly ("memory-safe") {
             let signaturePos := mul(0x41, pos)
             r := mload(add(signatures, add(signaturePos, 0x20)))
             s := mload(add(signatures, add(signaturePos, 0x40)))
