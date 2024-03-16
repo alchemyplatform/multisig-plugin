@@ -1,6 +1,13 @@
 [profile.default]
-src = "src"
-out = "out"
-libs = ["lib"]
+solc = '0.8.22'
+evm_version='paris'
+via_ir = true
+src = 'src'
+out = 'out'
+test = 'test'
+libs = ['lib']
+optimizer = true
+optimizer_runs = 1000000
+ignored_error_codes = []
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

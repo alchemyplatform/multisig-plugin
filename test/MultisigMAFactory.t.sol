@@ -52,7 +52,7 @@ contract MultisigModularAccountFactoryTest is Test {
         owners.push(owner2);
         entryPoint = new EntryPoint();
         impl = address(new UpgradeableModularAccount(IEntryPoint(address(entryPoint))));
-        multisigPlugin = new MultisigPlugin();
+        multisigPlugin = new MultisigPlugin(IEntryPoint(address(entryPoint)));
         bytes32 manifestHash = keccak256(abi.encode(multisigPlugin.pluginManifest()));
         factory = new MultisigModularAccountFactory(
             address(this), address(multisigPlugin), impl, manifestHash, IEntryPoint(address(entryPoint))

@@ -24,6 +24,7 @@ import {SIG_VALIDATION_FAILED, SIG_VALIDATION_PASSED} from "@alchemy/modular-acc
 import {CastLib} from "@alchemy/modular-account/src/helpers/CastLib.sol";
 import {IStandardExecutor} from "@alchemy/modular-account/src/interfaces/IStandardExecutor.sol";
 import {UpgradeableModularAccount} from "@alchemy/modular-account/src/account/UpgradeableModularAccount.sol";
+import {IEntryPoint} from "@alchemy/modular-account/src/interfaces/erc4337/IEntryPoint.sol";
 
 import {IMultisigPlugin} from "./IMultisigPlugin.sol";
 
@@ -67,6 +68,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
 
     AssociatedLinkedListSet internal _owners;
     mapping(address => OwnershipMetadata) internal _ownerMetadata;
+    IEntryPoint public immutable ENTRYPOINT;
 
     /// @notice Metadata of the ownership of an account.
     /// @param numOwners number of owners on the account
@@ -74,6 +76,10 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     struct OwnershipMetadata {
         uint128 numOwners;
         uint128 threshold;
+    }
+
+    constructor(IEntryPoint entryPoint) {
+        ENTRYPOINT = entryPoint;
     }
 
     // ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -154,7 +160,8 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
 
     /// @inheritdoc IERC1271
     function isValidSignature(bytes32 digest, bytes memory signature) external view override returns (bytes4) {
-        (bool failed,) = checkNSignatures(getMessageHash(msg.sender, abi.encode(digest)), msg.sender, signature);
+        bytes32 wrappedDigest = getMessageHash(msg.sender, abi.encode(digest));
+        (bool failed,) = checkNSignatures(wrappedDigest, wrappedDigest, msg.sender, signature);
 
         return failed ? _1271_MAGIC_VALUE_FAILURE : _1271_MAGIC_VALUE;
     }
@@ -179,12 +186,62 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         returns (uint256)
     {
         if (functionId == uint8(FunctionId.USER_OP_VALIDATION_OWNER)) {
-            (bool failed,) = checkNSignatures(userOpHash.toEthSignedMessageHash(), msg.sender, userOp.signature);
+            // UserOp.sig format:
+            // 0-32: upperLimitPreVerificationGas
+            // 32-64: upperLimitMaxFeePerGas
+            // 64-96: upperLimitMaxPriorityFeePerGas
+            // 96-96+n: k signatures, each sig is 65 bytes each (so n = 65 * k)
+            // 96+n-: contract signatures if any
+            if (userOp.signature.length < 96) {
+                revert InvalidSigLength();
+            }
+
+            (
+                uint256 upperLimitPreVerificationGas,
+                uint256 upperLimitMaxFeePerGas,
+                uint256 upperLimitMaxPriorityFeePerGas
+            ) = abi.decode(userOp.signature[0:96], (uint256, uint256, uint256));
+
+            bytes32 actualDigest = userOpHash.toEthSignedMessageHash();
+            bytes32 upperLimitDigest = (
+                upperLimitPreVerificationGas == userOp.preVerificationGas
+                    && upperLimitMaxFeePerGas == userOp.maxFeePerGas
+                    && upperLimitMaxPriorityFeePerGas == userOp.maxPriorityFeePerGas
+            )
+                ? actualDigest
+                : _getUserOpHash(
+                    userOp, upperLimitPreVerificationGas, upperLimitMaxFeePerGas, upperLimitMaxPriorityFeePerGas
+                ).toEthSignedMessageHash();
+            (bool failed,) = checkNSignatures(actualDigest, upperLimitDigest, msg.sender, userOp.signature[96:]);
+
+            // make sure userOp doesnt use more than the max fees
+            // we revert here as its better DevEx over silently failing in case a bad dummy sig is used
+            if (upperLimitPreVerificationGas < userOp.preVerificationGas) {
+                revert InvalidPreVerificationGas();
+            }
+            if (upperLimitMaxFeePerGas < userOp.maxFeePerGas) {
+                revert InvalidMaxFeePerGas();
+            }
+            if (upperLimitMaxPriorityFeePerGas < userOp.maxPriorityFeePerGas) {
+                revert InvalidMaxPriorityFeePerGas();
+            }
 
             return failed ? SIG_VALIDATION_FAILED : SIG_VALIDATION_PASSED;
         }
 
         revert NotImplemented(msg.sig, functionId);
+    }
+
+    function _getUserOpHash(
+        UserOperation memory userOp,
+        uint256 upperLimitPreVerificationGas,
+        uint256 upperLimitMaxFeePerGas,
+        uint256 upperLimitMaxPriorityFeePerGas
+    ) internal view returns (bytes32) {
+        userOp.preVerificationGas = upperLimitPreVerificationGas;
+        userOp.maxFeePerGas = upperLimitMaxFeePerGas;
+        userOp.maxPriorityFeePerGas = upperLimitMaxPriorityFeePerGas;
+        return ENTRYPOINT.getUserOpHash(userOp);
     }
 
     /// @inheritdoc BasePlugin
@@ -284,48 +341,64 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     // ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
     /// @inheritdoc IMultisigPlugin
-    function checkNSignatures(bytes32 digest, address account, bytes memory signatures)
-        public
-        view
-        returns (bool failed, uint256 firstFailure)
-    {
+    function checkNSignatures(
+        bytes32 actualDigest,
+        bytes32 upperLimitGasDigest,
+        address account,
+        bytes memory signatures
+    ) public view returns (bool failed, uint256 firstFailure) {
         uint256 threshold = uint256(_ownerMetadata[account].threshold);
+
+        uint256 minSigLen = 65 * threshold;
+        if (signatures.length < minSigLen) {
+            revert InvalidSigLength();
+        }
 
         address lastOwner;
         address currentOwner;
         uint8 v;
         bytes32 r;
         bytes32 s;
+        // if the digests differ, make sure we have at least 1 sig on the digest using the actual gas values
+        bool needSigOnActualGas = actualDigest != upperLimitGasDigest;
 
         for (uint256 i = 0; i < threshold; i++) {
             (v, r, s) = _signatureSplit(signatures, i);
 
             bool sigSuccess;
 
+            // v >= 32 implies it's signed over the actual digest
+            bytes32 digest;
+            if (v >= 32) {
+                digest = actualDigest;
+                v %= 32;
+                needSigOnActualGas = false;
+            } else {
+                digest = upperLimitGasDigest;
+            }
+
             // v == 0 is the contract owner case
             if (v == 0) {
-                // r contains the address to perform 1271 validation on
-                currentOwner = address(uint160(uint256(r)));
-
                 // s is the memory offset containing the signature
                 bytes memory contractSignature;
                 {
                     uint256 offset = uint256(s);
-                    if (offset > signatures.length || offset < 65 * threshold) {
+                    if (offset > signatures.length || offset < minSigLen) {
                         revert InvalidSigOffset();
                     }
 
-                    uint256 contractSignatureLen;
-                    assembly ("memory-safe") {
-                        contractSignatureLen := mload(add(add(signatures, offset), 0x20))
-                    }
-                    if (offset + 32 + contractSignatureLen > signatures.length) {
-                        revert InvalidSigOffset();
-                    }
+                    uint256 totalContractSigLen;
                     assembly ("memory-safe") {
                         contractSignature := add(add(signatures, offset), 0x20)
+                        totalContractSigLen := add(mload(contractSignature), 0x20) // inc prefixed 32 bytes of len(bytes)
+                    }
+                    if (offset + totalContractSigLen > signatures.length) {
+                        revert InvalidSigOffset();
                     }
                 }
+
+                // r contains the address to perform 1271 validation on
+                currentOwner = address(uint160(uint256(r)));
 
                 sigSuccess = SignatureChecker.isValidERC1271SignatureNow(currentOwner, digest, contractSignature);
             } else {
@@ -343,6 +416,11 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 }
             }
             lastOwner = currentOwner;
+        }
+
+        // if we need a signature on the actual gas, and we didn't get one, revert
+        if (needSigOnActualGas) {
+            revert InvalidGasValues();
         }
     }
 
