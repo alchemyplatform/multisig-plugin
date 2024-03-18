@@ -31,7 +31,7 @@ import {IMultisigPlugin} from "./IMultisigPlugin.sol";
 /// @title Multisig Plugin
 /// @author Alchemy
 /// @notice This plugin adds a k of n threshold ownership scheme to a ERC6900 smart contract account
-/// @notice The verification design takes inspiration from [Safe](https://github.com/safe-global/safe-smart-account)'s implementation
+/// @notice Multisig verification impl is inspired by [Safe](https://github.com/safe-global/safe-smart-account)
 ///
 /// It supports [ERC-1271](https://eips.ethereum.org/EIPS/eip-1271) signature
 /// validation for both validating the signature on user operations and in
@@ -390,7 +390,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                     uint256 totalContractSigLen;
                     assembly ("memory-safe") {
                         contractSignature := add(add(signatures, offset), 0x20)
-                        totalContractSigLen := add(mload(contractSignature), 0x20) // inc prefixed 32 bytes of len(bytes)
+                        totalContractSigLen := add(mload(contractSignature), 0x20) // prefixed 32 bytes of len(bytes)
                     }
                     if (offset + totalContractSigLen > signatures.length) {
                         revert InvalidSigOffset();
