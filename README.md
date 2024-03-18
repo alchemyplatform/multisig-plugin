@@ -1,11 +1,15 @@
-## Modular Account Plugin
+## Multisig Plugin
 
-This is a very basic example of an ERC6900 compatible plugin called CounterPlugin, built in Foundry. It has one function that can be called through a user operation, called `increment`. In `/src` you will find this plugin, documented so you can understand how it works in detail.
+This repository contains an ERC6900 compatible k-of-n Multisig Plugin and a factory contract that deploys [Modular Accounts](https://github.com/alchemyplatform/modular-account) with Multisig Plugin installed. 
 
-You will also find a basic test in `/test` which will show this counter plugin working. Here you'll see how to setup the modular account, install the plugins and send a user operation specifying the intent to increment the count. Use `forge test` to run these tests.
+The signature verification design took inspiration from [Safe](https://github.com/safe-global/safe-smart-account). 
 
-Feel free to modify the plugin and tests to challenge your understanding of ERC6900 plugins, or use this to start building your own plugin!
+ERC4337 User Operations require gas fields to be specified and signed over which presents a problem - if the time taken between the first and the k-th signer is long, and the network's gas prices spike, there is a risk that the user operation would not be included.
 
-## Foundry Documentation
+We implemented a variable gas price feature to address this. The first k-1 signers can specify an upper limit gas bound that the transaction should cost, and the kth signer can choose how much the transaction will cost before submitting it as long as it's below the upper limit set by the first k-1 signers. This reduces the risk of having to collect k signatures again without having to overpay.
 
-https://book.getfoundry.sh/
+## Testing and Deploying
+
+```forge test``` to test
+
+```forge scripts script/Deploy.s.sol``` to deploy
