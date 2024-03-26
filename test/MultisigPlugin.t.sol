@@ -169,7 +169,7 @@ contract MultisigPluginTest is Test {
         ownersToAdd1[0] = newOwner;
         ownersToAdd1[1] = newOwner2;
 
-        uint256 newThreshold = 2;
+        uint128 newThreshold = 2;
 
         vm.expectEmit(true, true, true, true);
         emit OwnerUpdated(accountA, ownersToAdd1, ownersToRemove, newThreshold);

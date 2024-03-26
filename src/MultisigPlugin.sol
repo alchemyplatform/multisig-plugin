@@ -89,7 +89,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     /// @inheritdoc IMultisigPlugin
     /// @dev If an owner is present in both ownersToAdd and ownersToRemove, it will be added as owner.
     /// The owner array cannot have 0 or duplicated addresses.
-    function updateOwnership(address[] memory ownersToAdd, address[] memory ownersToRemove, uint256 newThreshold)
+    function updateOwnership(address[] memory ownersToAdd, address[] memory ownersToRemove, uint128 newThreshold)
         public
         isInitialized(msg.sender)
     {
@@ -120,7 +120,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
 
         // If newThreshold is zero, don't update and keep the previous threshold value
         if (newThreshold != 0) {
-            metadata.threshold = uint128(newThreshold);
+            metadata.threshold = newThreshold;
         }
         if (metadata.threshold > numOwners) {
             revert InvalidThreshold();
@@ -453,7 +453,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     /// @inheritdoc BasePlugin
     /// @dev The owner array cannot have 0 or duplicated addresses.
     function _onInstall(bytes calldata data) internal override isNotInitialized(msg.sender) {
-        (address[] memory initialOwners, uint256 threshold) = abi.decode(data, (address[], uint256));
+        (address[] memory initialOwners, uint128 threshold) = abi.decode(data, (address[], uint128));
         if (initialOwners.length == 0) {
             revert EmptyOwnersNotAllowed();
         }
@@ -462,7 +462,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         }
 
         _addOwnersOrRevert(msg.sender, initialOwners);
-        _ownerMetadata[msg.sender] = OwnershipMetadata(uint128(initialOwners.length), uint128(threshold));
+        _ownerMetadata[msg.sender] = OwnershipMetadata(uint128(initialOwners.length), threshold);
 
         emit OwnerUpdated(msg.sender, initialOwners, new address[](0), threshold);
     }
