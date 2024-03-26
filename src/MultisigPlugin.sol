@@ -24,7 +24,6 @@ import {SIG_VALIDATION_FAILED, SIG_VALIDATION_PASSED} from "@alchemy/modular-acc
 import {CastLib} from "@alchemy/modular-account/src/helpers/CastLib.sol";
 import {IStandardExecutor} from "@alchemy/modular-account/src/interfaces/IStandardExecutor.sol";
 import {UpgradeableModularAccount} from "@alchemy/modular-account/src/account/UpgradeableModularAccount.sol";
-import {IEntryPoint} from "@alchemy/modular-account/src/interfaces/erc4337/IEntryPoint.sol";
 
 import {IMultisigPlugin} from "./IMultisigPlugin.sol";
 
@@ -68,7 +67,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
 
     AssociatedLinkedListSet internal _owners;
     mapping(address => OwnershipMetadata) internal _ownerMetadata;
-    IEntryPoint public immutable ENTRYPOINT;
+    address public immutable ENTRYPOINT;
 
     /// @notice Metadata of the ownership of an account.
     /// @param numOwners number of owners on the account
@@ -78,7 +77,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         uint128 threshold;
     }
 
-    constructor(IEntryPoint entryPoint) {
+    constructor(address entryPoint) {
         ENTRYPOINT = entryPoint;
     }
 
@@ -231,18 +230,6 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         }
 
         revert NotImplemented(msg.sig, functionId);
-    }
-
-    function _getUserOpHash(
-        UserOperation memory userOp,
-        uint256 upperLimitPreVerificationGas,
-        uint256 upperLimitMaxFeePerGas,
-        uint256 upperLimitMaxPriorityFeePerGas
-    ) internal view returns (bytes32) {
-        userOp.preVerificationGas = upperLimitPreVerificationGas;
-        userOp.maxFeePerGas = upperLimitMaxFeePerGas;
-        userOp.maxPriorityFeePerGas = upperLimitMaxPriorityFeePerGas;
-        return ENTRYPOINT.getUserOpHash(userOp);
     }
 
     /// @inheritdoc BasePlugin
@@ -498,5 +485,52 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     /// @inheritdoc BasePlugin
     function _isInitialized(address account) internal view override returns (bool) {
         return !_owners.isEmpty(account);
+    }
+
+    function _getUserOpHash(
+        UserOperation calldata userOp,
+        uint256 upperLimitPreVerificationGas,
+        uint256 upperLimitMaxFeePerGas,
+        uint256 upperLimitMaxPriorityFeePerGas
+    ) internal view returns (bytes32) {
+        address sender;
+        assembly {
+            sender := calldataload(userOp)
+        }
+        uint256 nonce = userOp.nonce;
+        bytes32 hashInitCode = _calldataKeccak(userOp.initCode);
+        bytes32 hashCallData = _calldataKeccak(userOp.callData);
+        uint256 callGasLimit = userOp.callGasLimit;
+        uint256 verificationGasLimit = userOp.verificationGasLimit;
+        uint256 preVerificationGas = upperLimitPreVerificationGas;
+        uint256 maxFeePerGas = upperLimitMaxFeePerGas;
+        uint256 maxPriorityFeePerGas = upperLimitMaxPriorityFeePerGas;
+        bytes32 hashPaymasterAndData = _calldataKeccak(userOp.paymasterAndData);
+
+        bytes32 userOpHash = keccak256(
+            abi.encode(
+                sender,
+                nonce,
+                hashInitCode,
+                hashCallData,
+                callGasLimit,
+                verificationGasLimit,
+                preVerificationGas,
+                maxFeePerGas,
+                maxPriorityFeePerGas,
+                hashPaymasterAndData
+            )
+        );
+
+        return keccak256(abi.encode(userOpHash, ENTRYPOINT, block.chainid));
+    }
+
+    function _calldataKeccak(bytes calldata data) internal pure returns (bytes32 ret) {
+        assembly {
+            let mem := mload(0x40)
+            let len := data.length
+            calldatacopy(mem, data.offset, len)
+            ret := keccak256(mem, len)
+        }
     }
 }
