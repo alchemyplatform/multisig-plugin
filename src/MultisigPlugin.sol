@@ -494,7 +494,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         uint256 upperLimitMaxPriorityFeePerGas
     ) internal view returns (bytes32) {
         address sender;
-        assembly {
+        assembly ("memory-safe") {
             sender := calldataload(userOp)
         }
         uint256 nonce = userOp.nonce;
@@ -526,7 +526,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     }
 
     function _calldataKeccak(bytes calldata data) internal pure returns (bytes32 ret) {
-        assembly {
+        assembly ("memory-safe") {
             let mem := mload(0x40)
             let len := data.length
             calldatacopy(mem, data.offset, len)
