@@ -1,4 +1,20 @@
-// SPDX-License-Identifier: UNLICENSED
+// This file is part of Multisig Plugin.
+//
+// Copyright 2024 Alchemy Insights, Inc.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// This program is free software: you can redistribute it and/or modify it under the terms of the GNU General
+// Public License as published by the Free Software Foundation, either version 3 of the License, or (at your
+// option) any later version.
+//
+// This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+// implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+// more details.
+//
+// You should have received a copy of the GNU General Public License along with this program. If not, see
+// <https://www.gnu.org/licenses/>.
+
 pragma solidity ^0.8.22;
 
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
@@ -30,7 +46,7 @@ import {IMultisigPlugin} from "./IMultisigPlugin.sol";
 /// @title Multisig Plugin
 /// @author Alchemy
 /// @notice This plugin adds a k of n threshold ownership scheme to a ERC6900 smart contract account
-/// @notice Multisig verification impl is inspired by [Safe](https://github.com/safe-global/safe-smart-account)
+/// @notice Multisig verification impl is derived by work done by [Safe](https://github.com/safe-global/safe-smart-account)
 ///
 /// It supports [ERC-1271](https://eips.ethereum.org/EIPS/eip-1271) signature
 /// validation for both validating the signature on user operations and in

@@ -1,4 +1,4 @@
-// This file is part of Modular Account.
+// This file is part of Multisig Plugin.
 //
 // Copyright 2024 Alchemy Insights, Inc.
 //
@@ -26,7 +26,7 @@ interface IMultisigPlugin {
     /// @param account The account whose ownership changed.
     /// @param addedOwners The address array of added owners.
     /// @param removedOwners The address array of removed owners.
-    /// @param threshold The new threshold.
+    /// @param threshold The new threshold. A threshold of 0 could mean that there isn't a change in threshold.
     event OwnerUpdated(address indexed account, address[] addedOwners, address[] removedOwners, uint256 threshold);
 
     error ECDSARecoverFailure();
@@ -46,7 +46,7 @@ interface IMultisigPlugin {
     /// only be called from an account.
     /// @param ownersToAdd The address array of owners to be added.
     /// @param ownersToRemove The address array of owners to be removed.
-    /// @param newThreshold The new threshold.
+    /// @param newThreshold The new threshold. 0 for no change.
     function updateOwnership(address[] memory ownersToAdd, address[] memory ownersToRemove, uint128 newThreshold)
         external;
 
@@ -71,11 +71,12 @@ interface IMultisigPlugin {
     /// @param maxGasDigest The hash of the digest.
     /// @param account The account to check the signatures for.
     /// @param signatures The signatures to check.
-    /// @return True if the signatures are valid.
+    /// @return failed False if the signatures are valid.
+    /// @return firstFailure Index of the first failed signature if the signature failed
     function checkNSignatures(bytes32 actualGasDigest, bytes32 maxGasDigest, address account, bytes memory signatures)
         external
         view
-        returns (bool, uint256);
+        returns (bool failed, uint256 firstFailure);
 
     /// @notice Check if an address is an owner of `account`.
     /// @param account The account to check.
