@@ -47,7 +47,7 @@ interface IMultisigPlugin {
     /// @param ownersToAdd The address array of owners to be added.
     /// @param ownersToRemove The address array of owners to be removed.
     /// @param newThreshold The new threshold.
-    function updateOwnership(address[] memory ownersToAdd, address[] memory ownersToRemove, uint256 newThreshold)
+    function updateOwnership(address[] memory ownersToAdd, address[] memory ownersToRemove, uint128 newThreshold)
         external;
 
     /// @notice Gets the EIP712 domain
