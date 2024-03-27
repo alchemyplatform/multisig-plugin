@@ -57,7 +57,7 @@ contract MultisigPluginTest is Test {
 
     function setUp() public {
         entryPoint = IEntryPoint(address(new EntryPoint()));
-        plugin = new MultisigPlugin(entryPoint);
+        plugin = new MultisigPlugin(address(entryPoint));
         accountA = address(new MockContractOwner(address(0)));
         ownersToAdd.push(ownerToAdd);
         vm.prank(accountA);
@@ -70,8 +70,8 @@ contract MultisigPluginTest is Test {
         assertEq(3, manifest.executionFunctions.length);
         // 5 native + 1 plugin exec func
         assertEq(6, manifest.userOpValidationFunctions.length);
-        // 2 plugin view func
-        assertEq(2, manifest.runtimeValidationFunctions.length);
+        // 5 native + 1 plugin exec func + 2 plugin view func
+        assertEq(8, manifest.runtimeValidationFunctions.length);
     }
 
     function test_onInstall_success() public {
@@ -169,7 +169,7 @@ contract MultisigPluginTest is Test {
         ownersToAdd1[0] = newOwner;
         ownersToAdd1[1] = newOwner2;
 
-        uint256 newThreshold = 2;
+        uint128 newThreshold = 2;
 
         vm.expectEmit(true, true, true, true);
         emit OwnerUpdated(accountA, ownersToAdd1, ownersToRemove, newThreshold);

@@ -1,4 +1,4 @@
-// This file is part of Modular Account.
+// This file is part of Multisig Plugin.
 //
 // Copyright 2024 Alchemy Insights, Inc.
 //
@@ -79,6 +79,10 @@ contract MultisigModularAccountFactory is Ownable2Step {
 
         if (threshold == 0 || threshold > owners.length) {
             revert InvalidThreshold();
+        }
+
+        if (owners.length > _MAX_OWNERS_ON_CREATION) {
+            revert OwnersLimitExceeded();
         }
 
         bytes[] memory pluginInitBytes = new bytes[](1);

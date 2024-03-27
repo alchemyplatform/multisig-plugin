@@ -1,4 +1,20 @@
-// SPDX-License-Identifier: UNLICENSED
+// This file is part of Multisig Plugin.
+//
+// Copyright 2024 Alchemy Insights, Inc.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// This program is free software: you can redistribute it and/or modify it under the terms of the GNU General
+// Public License as published by the Free Software Foundation, either version 3 of the License, or (at your
+// option) any later version.
+//
+// This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+// implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+// more details.
+//
+// You should have received a copy of the GNU General Public License along with this program. If not, see
+// <https://www.gnu.org/licenses/>.
+
 pragma solidity ^0.8.22;
 
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
@@ -24,14 +40,13 @@ import {SIG_VALIDATION_FAILED, SIG_VALIDATION_PASSED} from "@alchemy/modular-acc
 import {CastLib} from "@alchemy/modular-account/src/helpers/CastLib.sol";
 import {IStandardExecutor} from "@alchemy/modular-account/src/interfaces/IStandardExecutor.sol";
 import {UpgradeableModularAccount} from "@alchemy/modular-account/src/account/UpgradeableModularAccount.sol";
-import {IEntryPoint} from "@alchemy/modular-account/src/interfaces/erc4337/IEntryPoint.sol";
 
 import {IMultisigPlugin} from "./IMultisigPlugin.sol";
 
 /// @title Multisig Plugin
 /// @author Alchemy
 /// @notice This plugin adds a k of n threshold ownership scheme to a ERC6900 smart contract account
-/// @notice Multisig verification impl is inspired by [Safe](https://github.com/safe-global/safe-smart-account)
+/// @notice Multisig verification impl is derived by work done by [Safe](https://github.com/safe-global/safe-smart-account)
 ///
 /// It supports [ERC-1271](https://eips.ethereum.org/EIPS/eip-1271) signature
 /// validation for both validating the signature on user operations and in
@@ -68,7 +83,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
 
     AssociatedLinkedListSet internal _owners;
     mapping(address => OwnershipMetadata) internal _ownerMetadata;
-    IEntryPoint public immutable ENTRYPOINT;
+    address public immutable ENTRYPOINT;
 
     /// @notice Metadata of the ownership of an account.
     /// @param numOwners number of owners on the account
@@ -78,7 +93,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         uint128 threshold;
     }
 
-    constructor(IEntryPoint entryPoint) {
+    constructor(address entryPoint) {
         ENTRYPOINT = entryPoint;
     }
 
@@ -89,7 +104,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     /// @inheritdoc IMultisigPlugin
     /// @dev If an owner is present in both ownersToAdd and ownersToRemove, it will be added as owner.
     /// The owner array cannot have 0 or duplicated addresses.
-    function updateOwnership(address[] memory ownersToAdd, address[] memory ownersToRemove, uint256 newThreshold)
+    function updateOwnership(address[] memory ownersToAdd, address[] memory ownersToRemove, uint128 newThreshold)
         public
         isInitialized(msg.sender)
     {
@@ -120,7 +135,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
 
         // If newThreshold is zero, don't update and keep the previous threshold value
         if (newThreshold != 0) {
-            metadata.threshold = uint128(newThreshold);
+            metadata.threshold = newThreshold;
         }
         if (metadata.threshold > numOwners) {
             revert InvalidThreshold();
@@ -233,18 +248,6 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         revert NotImplemented(msg.sig, functionId);
     }
 
-    function _getUserOpHash(
-        UserOperation memory userOp,
-        uint256 upperLimitPreVerificationGas,
-        uint256 upperLimitMaxFeePerGas,
-        uint256 upperLimitMaxPriorityFeePerGas
-    ) internal view returns (bytes32) {
-        userOp.preVerificationGas = upperLimitPreVerificationGas;
-        userOp.maxFeePerGas = upperLimitMaxFeePerGas;
-        userOp.maxPriorityFeePerGas = upperLimitMaxPriorityFeePerGas;
-        return ENTRYPOINT.getUserOpHash(userOp);
-    }
-
     /// @inheritdoc BasePlugin
     function pluginManifest() external pure override returns (PluginManifest memory) {
         PluginManifest memory manifest;
@@ -289,13 +292,17 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
             associatedFunction: ownerUserOpValidationFunction
         });
 
-        // No runtime validation possible
         ManifestFunction memory alwaysAllowFunction = ManifestFunction({
             functionType: ManifestAssociatedFunctionType.RUNTIME_VALIDATION_ALWAYS_ALLOW,
             functionId: 0, // Unused.
             dependencyIndex: 0 // Unused.
         });
-        manifest.runtimeValidationFunctions = new ManifestAssociatedFunction[](2);
+        ManifestFunction memory alwaysRevertFunction = ManifestFunction({
+            functionType: ManifestAssociatedFunctionType.SELF,
+            functionId: 0,
+            dependencyIndex: 0 // Unused.
+        });
+        manifest.runtimeValidationFunctions = new ManifestAssociatedFunction[](8);
         manifest.runtimeValidationFunctions[0] = ManifestAssociatedFunction({
             executionSelector: this.isValidSignature.selector,
             associatedFunction: alwaysAllowFunction
@@ -303,6 +310,30 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         manifest.runtimeValidationFunctions[1] = ManifestAssociatedFunction({
             executionSelector: this.eip712Domain.selector,
             associatedFunction: alwaysAllowFunction
+        });
+        manifest.runtimeValidationFunctions[2] = ManifestAssociatedFunction({
+            executionSelector: this.updateOwnership.selector,
+            associatedFunction: alwaysRevertFunction
+        });
+        manifest.runtimeValidationFunctions[3] = ManifestAssociatedFunction({
+            executionSelector: IStandardExecutor.execute.selector,
+            associatedFunction: alwaysRevertFunction
+        });
+        manifest.runtimeValidationFunctions[4] = ManifestAssociatedFunction({
+            executionSelector: IStandardExecutor.executeBatch.selector,
+            associatedFunction: alwaysRevertFunction
+        });
+        manifest.runtimeValidationFunctions[5] = ManifestAssociatedFunction({
+            executionSelector: UpgradeableModularAccount.installPlugin.selector,
+            associatedFunction: alwaysRevertFunction
+        });
+        manifest.runtimeValidationFunctions[6] = ManifestAssociatedFunction({
+            executionSelector: UpgradeableModularAccount.uninstallPlugin.selector,
+            associatedFunction: alwaysRevertFunction
+        });
+        manifest.runtimeValidationFunctions[7] = ManifestAssociatedFunction({
+            executionSelector: UUPSUpgradeable.upgradeToAndCall.selector,
+            associatedFunction: alwaysRevertFunction
         });
 
         return manifest;
@@ -463,7 +494,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     /// @inheritdoc BasePlugin
     /// @dev The owner array cannot have 0 or duplicated addresses.
     function _onInstall(bytes calldata data) internal override isNotInitialized(msg.sender) {
-        (address[] memory initialOwners, uint256 threshold) = abi.decode(data, (address[], uint256));
+        (address[] memory initialOwners, uint128 threshold) = abi.decode(data, (address[], uint128));
         if (initialOwners.length == 0) {
             revert EmptyOwnersNotAllowed();
         }
@@ -472,7 +503,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         }
 
         _addOwnersOrRevert(msg.sender, initialOwners);
-        _ownerMetadata[msg.sender] = OwnershipMetadata(uint128(initialOwners.length), uint128(threshold));
+        _ownerMetadata[msg.sender] = OwnershipMetadata(uint128(initialOwners.length), threshold);
 
         emit OwnerUpdated(msg.sender, initialOwners, new address[](0), threshold);
     }
@@ -508,5 +539,52 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     /// @inheritdoc BasePlugin
     function _isInitialized(address account) internal view override returns (bool) {
         return !_owners.isEmpty(account);
+    }
+
+    function _getUserOpHash(
+        UserOperation calldata userOp,
+        uint256 upperLimitPreVerificationGas,
+        uint256 upperLimitMaxFeePerGas,
+        uint256 upperLimitMaxPriorityFeePerGas
+    ) internal view returns (bytes32) {
+        address sender;
+        assembly ("memory-safe") {
+            sender := calldataload(userOp)
+        }
+        uint256 nonce = userOp.nonce;
+        bytes32 hashInitCode = _calldataKeccak(userOp.initCode);
+        bytes32 hashCallData = _calldataKeccak(userOp.callData);
+        uint256 callGasLimit = userOp.callGasLimit;
+        uint256 verificationGasLimit = userOp.verificationGasLimit;
+        uint256 preVerificationGas = upperLimitPreVerificationGas;
+        uint256 maxFeePerGas = upperLimitMaxFeePerGas;
+        uint256 maxPriorityFeePerGas = upperLimitMaxPriorityFeePerGas;
+        bytes32 hashPaymasterAndData = _calldataKeccak(userOp.paymasterAndData);
+
+        bytes32 userOpHash = keccak256(
+            abi.encode(
+                sender,
+                nonce,
+                hashInitCode,
+                hashCallData,
+                callGasLimit,
+                verificationGasLimit,
+                preVerificationGas,
+                maxFeePerGas,
+                maxPriorityFeePerGas,
+                hashPaymasterAndData
+            )
+        );
+
+        return keccak256(abi.encode(userOpHash, ENTRYPOINT, block.chainid));
+    }
+
+    function _calldataKeccak(bytes calldata data) internal pure returns (bytes32 ret) {
+        assembly ("memory-safe") {
+            let mem := mload(0x40)
+            let len := data.length
+            calldatacopy(mem, data.offset, len)
+            ret := keccak256(mem, len)
+        }
     }
 }

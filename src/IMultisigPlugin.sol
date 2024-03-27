@@ -1,4 +1,4 @@
-// This file is part of Modular Account.
+// This file is part of Multisig Plugin.
 //
 // Copyright 2024 Alchemy Insights, Inc.
 //
@@ -26,7 +26,7 @@ interface IMultisigPlugin {
     /// @param account The account whose ownership changed.
     /// @param addedOwners The address array of added owners.
     /// @param removedOwners The address array of removed owners.
-    /// @param threshold The new threshold.
+    /// @param threshold The new threshold. A threshold of 0 could mean that there isn't a change in threshold.
     event OwnerUpdated(address indexed account, address[] addedOwners, address[] removedOwners, uint256 threshold);
 
     error ECDSARecoverFailure();
@@ -47,8 +47,8 @@ interface IMultisigPlugin {
     /// only be called from an account.
     /// @param ownersToAdd The address array of owners to be added.
     /// @param ownersToRemove The address array of owners to be removed.
-    /// @param newThreshold The new threshold.
-    function updateOwnership(address[] memory ownersToAdd, address[] memory ownersToRemove, uint256 newThreshold)
+    /// @param newThreshold The new threshold. 0 for no change.
+    function updateOwnership(address[] memory ownersToAdd, address[] memory ownersToRemove, uint128 newThreshold)
         external;
 
     /// @notice Gets the EIP712 domain
