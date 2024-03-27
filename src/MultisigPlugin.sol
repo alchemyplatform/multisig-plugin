@@ -276,13 +276,17 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
             associatedFunction: ownerUserOpValidationFunction
         });
 
-        // No runtime validation possible
         ManifestFunction memory alwaysAllowFunction = ManifestFunction({
             functionType: ManifestAssociatedFunctionType.RUNTIME_VALIDATION_ALWAYS_ALLOW,
             functionId: 0, // Unused.
             dependencyIndex: 0 // Unused.
         });
-        manifest.runtimeValidationFunctions = new ManifestAssociatedFunction[](2);
+        ManifestFunction memory alwaysRevertFunction = ManifestFunction({
+            functionType: ManifestAssociatedFunctionType.SELF,
+            functionId: 0,
+            dependencyIndex: 0 // Unused.
+        });
+        manifest.runtimeValidationFunctions = new ManifestAssociatedFunction[](8);
         manifest.runtimeValidationFunctions[0] = ManifestAssociatedFunction({
             executionSelector: this.isValidSignature.selector,
             associatedFunction: alwaysAllowFunction
@@ -290,6 +294,30 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         manifest.runtimeValidationFunctions[1] = ManifestAssociatedFunction({
             executionSelector: this.eip712Domain.selector,
             associatedFunction: alwaysAllowFunction
+        });
+        manifest.runtimeValidationFunctions[2] = ManifestAssociatedFunction({
+            executionSelector: this.updateOwnership.selector,
+            associatedFunction: alwaysRevertFunction
+        });
+        manifest.runtimeValidationFunctions[3] = ManifestAssociatedFunction({
+            executionSelector: IStandardExecutor.execute.selector,
+            associatedFunction: alwaysRevertFunction
+        });
+        manifest.runtimeValidationFunctions[4] = ManifestAssociatedFunction({
+            executionSelector: IStandardExecutor.executeBatch.selector,
+            associatedFunction: alwaysRevertFunction
+        });
+        manifest.runtimeValidationFunctions[5] = ManifestAssociatedFunction({
+            executionSelector: UpgradeableModularAccount.installPlugin.selector,
+            associatedFunction: alwaysRevertFunction
+        });
+        manifest.runtimeValidationFunctions[6] = ManifestAssociatedFunction({
+            executionSelector: UpgradeableModularAccount.uninstallPlugin.selector,
+            associatedFunction: alwaysRevertFunction
+        });
+        manifest.runtimeValidationFunctions[7] = ManifestAssociatedFunction({
+            executionSelector: UUPSUpgradeable.upgradeToAndCall.selector,
+            associatedFunction: alwaysRevertFunction
         });
 
         return manifest;

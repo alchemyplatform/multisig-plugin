@@ -70,8 +70,8 @@ contract MultisigPluginTest is Test {
         assertEq(3, manifest.executionFunctions.length);
         // 5 native + 1 plugin exec func
         assertEq(6, manifest.userOpValidationFunctions.length);
-        // 2 plugin view func
-        assertEq(2, manifest.runtimeValidationFunctions.length);
+        // 5 native + 1 plugin exec func + 2 plugin view func
+        assertEq(8, manifest.runtimeValidationFunctions.length);
     }
 
     function test_onInstall_success() public {
