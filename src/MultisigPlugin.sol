@@ -399,15 +399,23 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 // r contains the address to perform 1271 validation on
                 currentOwner = address(uint160(uint256(r)));
 
-                if (!SignatureChecker.isValidERC1271SignatureNow(currentOwner, digest, contractSignature)) {
+                (bool success, bytes memory result) =
+                    currentOwner.staticcall(abi.encodeCall(IERC1271.isValidSignature, (digest, contractSignature)));
+
+                // revert if call fails or return length is wrong
+                if (!success || result.length < 4) {
                     revert InvalidSig();
+                }
+
+                if (abi.decode(result, (bytes4)) != _1271_MAGIC_VALUE) {
+                    if (!failed) {
+                        firstFailure = i;
+                        failed = true;
+                    }
                 }
             } else {
-                ECDSA.RecoverError error;
-                (currentOwner, error) = digest.tryRecover(v, r, s);
-                if (error != ECDSA.RecoverError.NoError) {
-                    revert InvalidSig();
-                }
+                // reverts if signature has the wrong s value, wrong v value, or if it's a bad point on the k1 curve
+                currentOwner = digest.recover(v, r, s);
             }
 
             if (currentOwner <= lastOwner || !_owners.contains(account, CastLib.toSetValue(currentOwner))) {
