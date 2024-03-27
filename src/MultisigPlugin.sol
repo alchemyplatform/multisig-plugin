@@ -366,8 +366,6 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         for (uint256 i = 0; i < threshold; i++) {
             (v, r, s) = _signatureSplit(signatures, i);
 
-            bool sigSuccess;
-
             // v >= 32 implies it's signed over the actual digest
             bytes32 digest;
             if (v >= 32) {
@@ -401,16 +399,18 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 // r contains the address to perform 1271 validation on
                 currentOwner = address(uint160(uint256(r)));
 
-                sigSuccess = SignatureChecker.isValidERC1271SignatureNow(currentOwner, digest, contractSignature);
+                if (!SignatureChecker.isValidERC1271SignatureNow(currentOwner, digest, contractSignature)) {
+                    revert InvalidSig();
+                }
             } else {
                 ECDSA.RecoverError error;
                 (currentOwner, error) = digest.tryRecover(v, r, s);
-                sigSuccess = error == ECDSA.RecoverError.NoError;
+                if (error != ECDSA.RecoverError.NoError) {
+                    revert InvalidSig();
+                }
             }
 
-            if (
-                !sigSuccess || currentOwner <= lastOwner || !_owners.contains(account, CastLib.toSetValue(currentOwner))
-            ) {
+            if (currentOwner <= lastOwner || !_owners.contains(account, CastLib.toSetValue(currentOwner))) {
                 if (!failed) {
                     firstFailure = i;
                     failed = true;
