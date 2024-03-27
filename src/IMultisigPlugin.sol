@@ -36,7 +36,6 @@ interface IMultisigPlugin {
     error InvalidMaxPriorityFeePerGas();
     error InvalidOwner(address owner);
     error InvalidPreVerificationGas();
-    error InvalidSig();
     error InvalidSigLength();
     error InvalidSigOffset();
     error InvalidThreshold();
