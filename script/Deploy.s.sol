@@ -1,4 +1,4 @@
-// This file is part of Modular Account.
+// This file is part of Multisig Plugin.
 //
 // Copyright 2024 Alchemy Insights, Inc.
 //
