@@ -432,15 +432,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 // r contains the address to perform 1271 validation on
                 currentOwner = address(uint160(uint256(r)));
 
-                (bool retSuccess, bytes memory result) =
-                    currentOwner.staticcall(abi.encodeCall(IERC1271.isValidSignature, (digest, contractSignature)));
-
-                // revert if call fails or return length is wrong
-                if (!retSuccess || result.length < 4) {
-                    revert InvalidSig();
-                }
-
-                if (abi.decode(result, (bytes4)) != _1271_MAGIC_VALUE) {
+                if (!SignatureChecker.isValidSignatureNow(currentOwner, digest, contractSignature)) {
                     if (success) {
                         firstFailure = i;
                         success = false;
