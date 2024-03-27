@@ -81,6 +81,10 @@ contract MultisigModularAccountFactory is Ownable2Step {
             revert InvalidThreshold();
         }
 
+        if (owners.length > _MAX_OWNERS_ON_CREATION) {
+            revert OwnersLimitExceeded();
+        }
+
         bytes[] memory pluginInitBytes = new bytes[](1);
         pluginInitBytes[0] = abi.encode(owners, threshold);
 
