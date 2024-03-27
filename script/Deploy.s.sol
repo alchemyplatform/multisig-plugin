@@ -61,7 +61,7 @@ contract Deploy is Script {
 
         // Deploy multisig plugin, and set plugin hash
         if (multisigPlugin == address(0)) {
-            multisigPlugin = address(new MultisigPlugin{salt: multisigPluginSalt}(entryPoint));
+            multisigPlugin = address(new MultisigPlugin{salt: multisigPluginSalt}(address(entryPoint)));
 
             if (expectedMultisigPlugin != address(0)) {
                 require(multisigPlugin == expectedMultisigPlugin, "MultisigPlugin address mismatch");

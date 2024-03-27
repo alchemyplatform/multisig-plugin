@@ -57,7 +57,7 @@ contract MultisigPluginTest is Test {
 
     function setUp() public {
         entryPoint = IEntryPoint(address(new EntryPoint()));
-        plugin = new MultisigPlugin(entryPoint);
+        plugin = new MultisigPlugin(address(entryPoint));
         accountA = address(new MockContractOwner(address(0)));
         ownersToAdd.push(ownerToAdd);
         vm.prank(accountA);
