@@ -72,11 +72,12 @@ interface IMultisigPlugin {
     /// @param maxGasDigest The hash of the digest.
     /// @param account The account to check the signatures for.
     /// @param signatures The signatures to check.
-    /// @return True if the signatures are valid.
+    /// @return success True if the signatures are valid.
+    /// @return firstFailure If failed, the index of the first failed signature.
     function checkNSignatures(bytes32 actualGasDigest, bytes32 maxGasDigest, address account, bytes memory signatures)
         external
         view
-        returns (bool, uint256);
+        returns (bool success, uint256 firstFailure);
 
     /// @notice Check if an address is an owner of `account`.
     /// @param account The account to check.

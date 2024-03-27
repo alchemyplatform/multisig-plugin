@@ -162,9 +162,9 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     /// @inheritdoc IERC1271
     function isValidSignature(bytes32 digest, bytes memory signature) external view override returns (bytes4) {
         bytes32 wrappedDigest = getMessageHash(msg.sender, abi.encode(digest));
-        (bool failed,) = checkNSignatures(wrappedDigest, wrappedDigest, msg.sender, signature);
+        (bool success,) = checkNSignatures(wrappedDigest, wrappedDigest, msg.sender, signature);
 
-        return failed ? _1271_MAGIC_VALUE_FAILURE : _1271_MAGIC_VALUE;
+        return success ? _1271_MAGIC_VALUE : _1271_MAGIC_VALUE_FAILURE;
     }
 
     // ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -213,7 +213,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 : _getUserOpHash(
                     userOp, upperLimitPreVerificationGas, upperLimitMaxFeePerGas, upperLimitMaxPriorityFeePerGas
                 ).toEthSignedMessageHash();
-            (bool failed,) = checkNSignatures(actualDigest, upperLimitDigest, msg.sender, userOp.signature[96:]);
+            (bool success,) = checkNSignatures(actualDigest, upperLimitDigest, msg.sender, userOp.signature[96:]);
 
             // make sure userOp doesnt use more than the max fees
             // we revert here as its better DevEx over silently failing in case a bad dummy sig is used
@@ -227,7 +227,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 revert InvalidMaxPriorityFeePerGas();
             }
 
-            return failed ? SIG_VALIDATION_FAILED : SIG_VALIDATION_PASSED;
+            return success ? SIG_VALIDATION_PASSED : SIG_VALIDATION_FAILED;
         }
 
         revert NotImplemented(msg.sig, functionId);
@@ -347,13 +347,15 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         bytes32 upperLimitGasDigest,
         address account,
         bytes memory signatures
-    ) public view returns (bool failed, uint256 firstFailure) {
+    ) public view returns (bool success, uint256 firstFailure) {
         uint256 threshold = uint256(_ownerMetadata[account].threshold);
 
         uint256 minSigLen = 65 * threshold;
         if (signatures.length < minSigLen) {
             revert InvalidSigLength();
         }
+
+        success = true;
 
         address lastOwner;
         address currentOwner;
@@ -399,18 +401,18 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 // r contains the address to perform 1271 validation on
                 currentOwner = address(uint160(uint256(r)));
 
-                (bool success, bytes memory result) =
+                (bool retSuccess, bytes memory result) =
                     currentOwner.staticcall(abi.encodeCall(IERC1271.isValidSignature, (digest, contractSignature)));
 
                 // revert if call fails or return length is wrong
-                if (!success || result.length < 4) {
+                if (!retSuccess || result.length < 4) {
                     revert InvalidSig();
                 }
 
                 if (abi.decode(result, (bytes4)) != _1271_MAGIC_VALUE) {
-                    if (!failed) {
+                    if (success) {
                         firstFailure = i;
-                        failed = true;
+                        success = false;
                     }
                 }
             } else {
@@ -419,9 +421,9 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
             }
 
             if (currentOwner <= lastOwner || !_owners.contains(account, CastLib.toSetValue(currentOwner))) {
-                if (!failed) {
+                if (success) {
                     firstFailure = i;
-                    failed = true;
+                    success = false;
                 }
             }
             lastOwner = currentOwner;
