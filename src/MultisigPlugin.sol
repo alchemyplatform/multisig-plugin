@@ -457,12 +457,12 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     }
 
     /// @inheritdoc IMultisigPlugin
-    function isOwnerOf(address account, address ownerToCheck) public view returns (bool) {
+    function isOwnerOf(address account, address ownerToCheck) external view returns (bool) {
         return _owners.contains(account, CastLib.toSetValue(ownerToCheck));
     }
 
     /// @inheritdoc IMultisigPlugin
-    function ownershipInfoOf(address account) public view returns (address[] memory, uint256) {
+    function ownershipInfoOf(address account) external view returns (address[] memory, uint256) {
         return (CastLib.toAddressArray(_owners.getAll(account)), uint256(_ownerMetadata[account].threshold));
     }
 
