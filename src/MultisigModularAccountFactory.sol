@@ -69,7 +69,7 @@ contract MultisigModularAccountFactory is Ownable2Step {
     /// @dev The owner array must be in strictly ascending order and not include the 0 address.
     /// @param salt salt for create2
     /// @param owners address array of the owners
-    function createAccount(uint256 salt, address[] calldata owners, uint256 threshold)
+    function createAccount(uint256 salt, address[] calldata owners, uint128 threshold)
         external
         returns (address addr)
     {
@@ -151,7 +151,7 @@ contract MultisigModularAccountFactory is Ownable2Step {
     /// @param owners array of addresses of the owner
     /// @param threshold threshold of account
     /// @return address of counterfactual account
-    function getAddress(uint256 salt, address[] calldata owners, uint256 threshold) external view returns (address) {
+    function getAddress(uint256 salt, address[] calldata owners, uint128 threshold) external view returns (address) {
         // Array can't be empty.
         if (owners.length == 0) {
             revert OwnersArrayEmpty();
