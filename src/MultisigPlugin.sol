@@ -452,7 +452,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
 
         // if the signature is longer than the offset, it means that there are extra bytes not used in the signature
         if (signatures.length > offset) {
-            revert InvalidSigLength();
+            revert InvalidSigOffset();
         }
 
         // if we need a signature on the actual gas, and we didn't get one, revert
