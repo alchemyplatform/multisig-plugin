@@ -381,8 +381,9 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     ) public view returns (bool success, uint256 firstFailure) {
         uint256 threshold = uint256(_ownerMetadata[account].threshold);
 
-        uint256 minSigLen = 65 * threshold;
-        if (signatures.length < minSigLen) {
+        // sig length must be longer than k * 65 bytes
+        uint256 offset = 65 * threshold;
+        if (signatures.length < offset) {
             revert InvalidSigLength();
         }
 
@@ -413,8 +414,8 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 // s is the memory offset containing the signature
                 bytes memory contractSignature;
                 {
-                    uint256 offset = uint256(s);
-                    if (offset > signatures.length || offset < minSigLen) {
+                    uint256 sigOffset = uint256(s);
+                    if (offset != sigOffset) {
                         revert InvalidSigOffset();
                     }
 
@@ -423,9 +424,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                         contractSignature := add(add(signatures, offset), 0x20)
                         totalContractSigLen := add(mload(contractSignature), 0x20) // prefixed 32 bytes of len(bytes)
                     }
-                    if (offset + totalContractSigLen > signatures.length) {
-                        revert InvalidSigOffset();
-                    }
+                    offset += totalContractSigLen;
                 }
 
                 // r contains the address to perform 1271 validation on
@@ -449,6 +448,11 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 }
             }
             lastOwner = currentOwner;
+        }
+
+        // if the signature is longer than the offset, it means that there are extra bytes not used in the signature
+        if (signatures.length > offset) {
+            revert InvalidSigOffset();
         }
 
         // if we need a signature on the actual gas, and we didn't get one, revert
