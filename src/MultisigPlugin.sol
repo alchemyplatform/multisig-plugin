@@ -61,6 +61,7 @@ import {IMultisigPlugin} from "./IMultisigPlugin.sol";
 /// the account, violating storage access rules. This also means that the
 /// owner of a modular account may not be another modular account if you want to
 /// send user operations through a bundler.
+
 contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     using AssociatedLinkedListSetLib for AssociatedLinkedListSet;
     using ECDSA for bytes32;
@@ -393,18 +394,22 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         bytes32 r;
         bytes32 s;
         // if the digests differ, make sure we have at least 1 sig on the digest using the actual gas values
-        bool needSigOnActualGas = actualDigest != upperLimitGasDigest;
+        uint256 numSigsOnActualGas = (actualDigest != upperLimitGasDigest) ? 1 : 0;
         success = true;
 
         for (uint256 i = 0; i < threshold; i++) {
             (v, r, s) = _signatureSplit(signatures, i);
 
             // v >= 32 implies it's signed over the actual digest
+            // if v > 60, it will fail the ecdsa recover check below
             bytes32 digest;
             if (v >= 32) {
                 digest = actualDigest;
-                v %= 32;
-                needSigOnActualGas = false;
+                v -= 32;
+                // Can have unchecked since we check against zero at the end
+                unchecked {
+                    numSigsOnActualGas -= 1;
+                }
             } else {
                 digest = upperLimitGasDigest;
             }
@@ -429,6 +434,10 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
 
                 // r contains the address to perform 1271 validation on
                 currentOwner = address(uint160(uint256(r)));
+                // make sure upper bits are clean
+                if (uint256(r) > uint256(uint160(currentOwner))) {
+                    revert InvalidAddress();
+                }
 
                 if (!SignatureChecker.isValidSignatureNow(currentOwner, digest, contractSignature)) {
                     if (success) {
@@ -456,8 +465,9 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
         }
 
         // if we need a signature on the actual gas, and we didn't get one, revert
-        if (needSigOnActualGas) {
-            revert InvalidGasValues();
+        // or if we got more signatures on the actual gas than expected, revert
+        if (numSigsOnActualGas != 0) {
+            revert InvalidNumSigsOnActualGas();
         }
     }
 
