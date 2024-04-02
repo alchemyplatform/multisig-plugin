@@ -430,7 +430,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                 // r contains the address to perform 1271 validation on
                 currentOwner = address(uint160(uint256(r)));
 
-                if (!SignatureChecker.isValidSignatureNow(currentOwner, digest, contractSignature)) {
+                if (!SignatureChecker.isValidERC1271SignatureNow(currentOwner, digest, contractSignature)) {
                     if (success) {
                         firstFailure = i;
                         success = false;
