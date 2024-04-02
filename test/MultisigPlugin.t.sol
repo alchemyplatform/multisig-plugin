@@ -431,6 +431,31 @@ contract MultisigPluginTest is Test {
         plugin.userOpValidationFunction(uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, userOpHash);
     }
 
+    function test_failUserOpValidationFunction_BadAddress() public {
+        vm.startPrank(accountA);
+
+        UserOperation memory userOp;
+        Owner memory newOwner = _createAccountOwner(0);
+        bytes32 userOpHash = entryPoint.getUserOpHash(userOp);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(newOwner.privateKey, userOpHash.toEthSignedMessageHash());
+
+        userOp.signature = abi.encodePacked(
+            type(uint256).max,
+            type(uint256).max,
+            type(uint256).max,
+            bytes32(uint256(uint160(newOwner.owner))) | bytes32(uint256(0xFF << 160)), // dirty upper bits
+            uint256(65),
+            uint8(32),
+            uint256(65),
+            r,
+            s,
+            v
+        );
+
+        vm.expectRevert(abi.encodeWithSelector(IMultisigPlugin.InvalidAddress.selector));
+        plugin.userOpValidationFunction(uint8(IMultisigPlugin.FunctionId.USER_OP_VALIDATION_OWNER), userOp, userOpHash);
+    }
+
     function test_fuzzFailUserOpValidationFunction_BadGas(string memory salt, UserOperation memory userOp) public {
         vm.startPrank(accountA);
 
