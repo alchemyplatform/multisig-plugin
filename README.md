@@ -14,7 +14,7 @@ The plugin conforms to these ERC versions:
 
 ## Core Functionalities
 
-Multisig Plugin is an plugin that provides validation functions for a k-of-n ownership scheme. **Multisig validation only works in the user operation context**.
+Multisig Plugin is an plugin that provides validation functions for a k-of-n ownership scheme. **Multisig validation only works in the user operation context**. 
 
 It's core features include:
 1. Installs multisig validators on native account functions (install/uninstallPlugin, execute/executeBatch, upgradeToAndCall)
@@ -24,15 +24,15 @@ It's core features include:
 
 ### Technical Decisions
 
-**Multisig validation scheme is applied only for the User Operation context**
+**Multisig validation scheme is applied only for the User Operation context**  
 By default, we expect Multisig signers to implement key management best practices such as key rotation. By using the user operation path, keys can be used for just signing without needing to procure native tokens for gas. Like other ERC4337 operations, it would be paid for by the account, or by a paymaster service.
 
-**Variable gas feature**
+**Variable gas feature**  
 User operations contain several gas/fee related fields - `preVerificationGas`, `maxFeePerGas` and `maxPriorityFeePerGas` - that specify the maximum fees that can be used for the user op. These fields are used to form `userOpHash` which has to be signed over by the k signers. If collecting the k signatures takes too long, it's likely that network prices would have shifted. If the userop is overpriced, the account would end up overpaying for transaction inclusion. However, if the userop is underpriced, the bundler would reject the user op and the k signers have to re-sign this user operation.
 
 This Multisig plugin includes a variable gas feature to address this problem. The fee values selected and signed over by the first k-1 signers is treated as a "maximum fee" and the k-th signer is able to choose final fee values to use based on the current network conditions. With this feature, there is no longer a risk of overpaying, or having to re-collect the k signatures.
 
-**Multisig signature spec**
+**Multisig signature spec**  
 The multisig signature scheme has the following format:
 
 `k signatures, packed encoding` || `contract signatures (if any), regular abi encoding`
@@ -41,7 +41,7 @@ Each signature in the `k signatures` is 65 bytes long, with the following format
 1. If it's an EOA signature, `signature = abi.encodePacked(r, s, v)`
 2. If it's a contract signature, `v` is set to 0, `r` is the address of the contract owner packed to 32 bytes, and `s` is the bytes offset of where the actual signature is located. This is relative to the starting location of `k signatures`. The actual contract signature bytes is appended to the k signatures.
 
-The above is the format for a ERC1271 signature. However, for user operation signatures, we prepend the above signature with 3 gas values from the variable gas feature to form this full signature:
+The above is the format for a ERC1271 signature. However, for user operation signatures, we prepend the above signature with 3 gas values from the variable gas feature to form this full signature:  
 `uint256 upperLimitPreVerificationGas` || `uint256 upperLimitMaxFeePerGas` || `uint256 upperLimitMaxPriorityFeePerGas` || `k signatures, packed encoding` || `contract signatures (if any), regular abi encoding`
 
 ## Development
