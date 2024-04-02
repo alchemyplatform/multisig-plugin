@@ -14,7 +14,7 @@ The plugin conforms to these ERC versions:
 
 ## Core Functionalities
 
-Multisig Plugin is an plugin that provides validation functions for a k-of-n ownership scheme. **Multisig validation only works in the user operation context**. 
+Multisig Plugin is an plugin that provides validation functions for a k-of-n ownership scheme. **Multisig validation only works in the user operation context.**
 
 It's core features include:
 1. Installs multisig validators on native account functions (install/uninstallPlugin, execute/executeBatch, upgradeToAndCall)
@@ -35,14 +35,16 @@ This Multisig plugin includes a variable gas feature to address this problem. Th
 **Multisig signature spec**  
 The multisig signature scheme has the following format:
 
-`k signatures, packed encoding` || `contract signatures (if any), regular abi encoding`
+`k signatures` || `contract signatures (if any)`
 
-Each signature in the `k signatures` is 65 bytes long, with the following format:
+Each signature in the `k signatures` is sorted in ascending order by owner address, is 65 bytes long, uses packed encoding and has the following format:
 1. If it's an EOA signature, `signature = abi.encodePacked(r, s, v)`
-2. If it's a contract signature, `v` is set to 0, `r` is the address of the contract owner packed to 32 bytes, and `s` is the bytes offset of where the actual signature is located. This is relative to the starting location of `k signatures`. The actual contract signature bytes is appended to the k signatures.
+2. If it's a contract signature, it is also `abi.encodePacked(r, s, v)` with `v` set to 0, `r` set to the address of the contract owner packed to 32 bytes, and `s` being the bytes offset of where the actual signature is located. This is relative to the starting location of `k signatures`. The actual contract signature has regular abi encoding, appended after the k signatures.
 
 The above is the format for a ERC1271 signature. However, for user operation signatures, we prepend the above signature with 3 gas values from the variable gas feature to form this full signature:  
-`uint256 upperLimitPreVerificationGas` || `uint256 upperLimitMaxFeePerGas` || `uint256 upperLimitMaxPriorityFeePerGas` || `k signatures, packed encoding` || `contract signatures (if any), regular abi encoding`
+`uint256 upperLimitPreVerificationGas` || `uint256 upperLimitMaxFeePerGas` || `uint256 upperLimitMaxPriorityFeePerGas` || `k signatures` || `contract signatures (if any)`
+
+Lastly, if the variable gas feature is used, we increment the `v` value of the k-th signature to denote that the signature is over the actual gas values. The other signatures would be verified against the `userOpHash` containing the above upper limit gas values.
 
 ## Development
 
