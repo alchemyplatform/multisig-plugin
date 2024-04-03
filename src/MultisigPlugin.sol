@@ -439,7 +439,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
                     revert InvalidAddress();
                 }
 
-                if (!SignatureChecker.isValidSignatureNow(currentOwner, digest, contractSignature)) {
+                if (!SignatureChecker.isValidERC1271SignatureNow(currentOwner, digest, contractSignature)) {
                     if (success) {
                         firstFailure = i;
                         success = false;
