@@ -126,10 +126,7 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
 
         uint256 toAddLen = ownersToAdd.length;
         if (toAddLen != toRemoveLen) {
-            // We remove owners on top, so it can't underflow here
-            unchecked {
-                numOwners = numOwners - toRemoveLen + toAddLen;
-            }
+            numOwners = numOwners - toRemoveLen + toAddLen;
             if (numOwners == 0) {
                 revert EmptyOwnersNotAllowed();
             }
