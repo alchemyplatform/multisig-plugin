@@ -44,7 +44,7 @@ Each signature in the `k signatures` is sorted in ascending order by owner addre
 The above is the format for a ERC-1271 signature. For user operation signatures, prepend the signature above with the 3 gas values from the variable gas feature to form this full signature:  
 `uint256 upperLimitPreVerificationGas` || `uint256 upperLimitMaxFeePerGas` || `uint256 upperLimitMaxPriorityFeePerGas` || `k signatures` || `contract signatures (if any)`
 
-Lastly, if the variable gas feature is used, we increment the `v` value of the k-th signature to denote that the signature is over the actual gas values. The other signatures would be verified against the `userOpHash` containing the above upper limit gas values.
+If the variable gas feature is used, the first k-1 signatures should sign over a user op with the upper limit gas values, and the k-th signature should sign over a user op with actual gas values. Additionally, the `v` value of the k-th signature should be incremented by 32 to denote that the signature is over the actual gas values. 
 
 ## Development
 
