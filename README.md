@@ -25,7 +25,7 @@ Its core features include:
 ### Technical Decisions
 
 **Multisig validation scheme is applied only for the User Operation context**  
-By default, we expect Multisig signers to implement key management best practices such as key rotation. By using the user operation path, keys can be used for just signing without needing to procure native tokens for gas. Like other ERC4337 operations, it would be paid for by the account, or by a paymaster service.
+We expect multisig signers to implement key management best practices such as key rotation. By using the user operation path, keys can be used just for signing without needing to procure native tokens for gas. Like other ERC-4337 operations, the transaction would be paid for by the account or by a paymaster service.
 
 **Variable gas feature**  
 User operations contain several gas/fee related fields - `preVerificationGas`, `maxFeePerGas` and `maxPriorityFeePerGas` - that specify the maximum fees that can be used for the user op. These fields are used to form `userOpHash` which has to be signed over by the k signers. If collecting the k signatures takes too long, it's likely that network prices would have shifted. If the userop is overpriced, the account would end up overpaying for transaction inclusion. However, if the userop is underpriced, the bundler would reject the user op and the k signers have to re-sign this user operation.
