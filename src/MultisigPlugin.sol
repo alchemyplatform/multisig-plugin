@@ -20,6 +20,7 @@ pragma solidity ^0.8.22;
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import {UUPSUpgradeable} from "@alchemy/modular-account/ext/UUPSUpgradeable.sol";
 import {
@@ -65,6 +66,7 @@ import {IMultisigPlugin} from "./IMultisigPlugin.sol";
 contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
     using AssociatedLinkedListSetLib for AssociatedLinkedListSet;
     using ECDSA for bytes32;
+    using SafeCast for uint256;
 
     string internal constant _NAME = "Multisig Plugin";
     string internal constant _VERSION = "1.0.0";
@@ -124,14 +126,11 @@ contract MultisigPlugin is BasePlugin, IMultisigPlugin, IERC1271 {
 
         uint256 toAddLen = ownersToAdd.length;
         if (toAddLen != toRemoveLen) {
-            // We remove owners on top, so it can't underflow here
-            unchecked {
-                numOwners = numOwners - toRemoveLen + toAddLen;
-            }
+            numOwners = numOwners - toRemoveLen + toAddLen;
             if (numOwners == 0) {
                 revert EmptyOwnersNotAllowed();
             }
-            metadata.numOwners = uint128(numOwners);
+            metadata.numOwners = numOwners.toUint128();
         }
 
         // If newThreshold is zero, don't update and keep the previous threshold value
