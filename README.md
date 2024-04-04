@@ -41,7 +41,7 @@ Each signature in the `k signatures` is sorted in ascending order by owner addre
 1. If it's an EOA signature, `signature = abi.encodePacked(r, s, v)`
 2. If it's a contract signature, it is also `abi.encodePacked(r, s, v)` with `v` set to 0, `r` set to the address of the contract owner expanded to 32 bytes, and `s` being the bytes offset of where the actual signature is located. This is relative to the starting location of `k signatures`. The actual contract signature has regular ABI encoding, appended after the `k signatures`.
 
-The above is the format for a ERC1271 signature. However, for user operation signatures, we prepend the above signature with 3 gas values from the variable gas feature to form this full signature:  
+The above is the format for a ERC-1271 signature. For user operation signatures, prepend the signature above with the 3 gas values from the variable gas feature to form this full signature:  
 `uint256 upperLimitPreVerificationGas` || `uint256 upperLimitMaxFeePerGas` || `uint256 upperLimitMaxPriorityFeePerGas` || `k signatures` || `contract signatures (if any)`
 
 Lastly, if the variable gas feature is used, we increment the `v` value of the k-th signature to denote that the signature is over the actual gas values. The other signatures would be verified against the `userOpHash` containing the above upper limit gas values.
