@@ -16,7 +16,7 @@ The plugin conforms to these ERC versions:
 
 Multisig Plugin is an plugin that provides validation functions for a k-of-n ownership scheme. **Multisig validation only works in the user operation context.**
 
-It's core features include:
+Its core features include:
 1. Installs multisig validators on native account functions (install/uninstallPlugin, execute/executeBatch, upgradeToAndCall)
 2. Installs a new execution function to modify account ownership by adding or removing owners, or modifying the threshold. This is guarded by the above validator
 3. ERC1271 smart contract signatures based on the same multisig scheme
