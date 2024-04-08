@@ -24,17 +24,17 @@ Its core features include:
 
 ### Technical Decisions
 
-#####Multisig validation scheme is applied only for the User Operation context#####
+##### Multisig validation scheme is applied only for the User Operation context #####
 We expect multisig signers to implement key management best practices such as key rotation. By using the user operation path, keys can be used just for signing without needing to procure native tokens for gas. Like other ERC-4337 operations, the transaction would be paid for by the account or by a paymaster service.
 
-#####Variable gas feature#####
+##### Variable gas feature #####
 User operations contain several gas/fee related fields - `preVerificationGas`, `maxFeePerGas` and `maxPriorityFeePerGas` - that specify the maximum fees that can be used for the user op. These fields (among others) are used to form the `userOpHash` which has to be signed over by the k signers. If collecting the k signatures takes too long, it's likely that network prices would have shifted. If the user op is overpriced, the account would end up overpaying for transaction inclusion. However, if the user op is underpriced, the bundler would reject the user op and the k signers have to re-sign this user operation.
 
 This multisig plugin includes a variable gas feature to address this problem. The fee values selected and signed over by the first k-1 signers are treated as a "maximum fee" and the k-th signer is able to choose final fee values to use based on the current network conditions. With this feature, there is no longer a risk of overpaying, or having to re-collect the k signatures.
 
 Note: Since paymasters sign over the user op with max gas values, the variable gas feature is very likely incompatible with most ERC4337 paymasters. 
 
-#####Multisig signature spec#####
+##### Multisig signature spec #####
 The multisig signature scheme has the following format:
 
 `k signatures` || `contract signatures (if any)`
