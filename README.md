@@ -32,6 +32,8 @@ User operations contain several gas/fee related fields - `preVerificationGas`, `
 
 This multisig plugin includes a variable gas feature to address this problem. The fee values selected and signed over by the first k-1 signers are treated as a "maximum fee" and the k-th signer is able to choose final fee values to use based on the current network conditions. With this feature, there is no longer a risk of overpaying, or having to re-collect the k signatures.
 
+Note: Since paymasters sign over the user op with max gas values, the variable gas feature is very likely incompatible with most ERC4337 paymasters. 
+
 #####Multisig signature spec#####
 The multisig signature scheme has the following format:
 
