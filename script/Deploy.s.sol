@@ -42,13 +42,13 @@ contract Deploy is Script {
 
     // Multisig plugin
     address public multisigPlugin = vm.envOr("MULTISIG_PLUGIN", address(0));
-    bytes32 public multisigPluginSalt = vm.envOr("MULTISIG_PLUGIN_SALT", bytes32(0));
+    bytes32 public multisigPluginSalt = bytes32(vm.envOr("MULTISIG_PLUGIN_SALT", uint256(0)));
     bytes32 public multisigPluginManifestHash;
     address public expectedMultisigPlugin = vm.envOr("EXPECTED_MULTISIG_PLUGIN", address(0));
 
     // Factory
     address public factory;
-    bytes32 public factorySalt = vm.envOr("FACTORY_SALT", bytes32(0));
+    bytes32 public factorySalt = bytes32(vm.envOr("FACTORY_SALT", uint256(0)));
     address public expectedFactory = vm.envOr("EXPECTED_FACTORY", address(0));
 
     function run() public {
