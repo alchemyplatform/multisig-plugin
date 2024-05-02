@@ -2,6 +2,10 @@
 
 Multisig Plugin is an ERC6900-compatible k-of-n ownership plugin that supports both EOA and smart contract owners.
 
+## Collaborators
+
+[<img src="https://assets-global.website-files.com/65d123ed4c76575a9e69648c/65db9e5db75bfd6e0a2a6065_maple-logo.png" alt="Maple Finance" height="32px">](https://maple.finance/)
+
 ## Overview
 
 This repository contains:
