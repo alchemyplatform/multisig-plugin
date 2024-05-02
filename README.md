@@ -1,4 +1,4 @@
-## Multisig Plugin
+# Multisig Plugin
 
 Multisig Plugin is an ERC6900-compatible k-of-n ownership plugin that supports both EOA and smart contract owners.
 
