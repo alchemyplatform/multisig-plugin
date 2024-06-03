@@ -219,7 +219,7 @@ contract MultisigPluginTest is Test {
 
         if (!plugin.isOwnerOf(accountA, newOwner.owner)) {
             // sig check should fail
-            assertEq(bytes4(0xFFFFFFFF), plugin.isValidSignature(digest, abi.encodePacked(r, s, v)));
+            assertEq(bytes4(0xFFFFFFFF), plugin.isValidSignature(digest, sig));
 
             plugin.updateOwnership(ownersToAdd1, new address[](0), 0);
         }
